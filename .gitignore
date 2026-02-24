@@ -1,0 +1,46 @@
+# Environment files
+.env
+.env.*
+!**/.env.example
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Node artifacts
+**/node_modules/
+frontend/wardo-hub-main/dist/
+frontend/wardo-hub-main/.lovable/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python artifacts
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Uploads and runtime data
+backend/uploads/
+runtime/uploads/
+runtime/cache/
+runtime/pipeline_outputs/
+services/pipeline/outputs/
+
+# Local LLM/vector artifacts
+services/llm/.venv/
+services/llm/chroma_db/
+
+# Large model/data binaries (recommended to keep out of git)
+assets/models/*.pt
+assets/models/*.pth
+assets/models/*.onnx
+assets/models/*.bin
+assets/models/*.safetensors
+assets/data/polyvore_outfits/images/

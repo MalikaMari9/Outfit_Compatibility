@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Playfair Display font for headings */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Wardo Fashion Platform Design System
+   Color Palette: Warm beige backgrounds, brown accents, sage green buttons, cream cards
+   Typography: Playfair Display for headings, Inter for body
+   Style: Modern minimalist, Pinterest-style, soft rounded corners, subtle shadows
+*/
+
+@layer base {
+  :root {
+    /* Warm beige background */
+    --background: 45 20% 96%;
+    --foreground: 30 10% 15%;
+
+    /* Cream cards */
+    --card: 45 30% 98%;
+    --card-foreground: 30 10% 15%;
+
+    --popover: 45 30% 98%;
+    --popover-foreground: 30 10% 15%;
+
+    /* Sage green primary */
+    --primary: 130 15% 42%;
+    --primary-foreground: 45 30% 98%;
+
+    /* Warm beige secondary */
+    --secondary: 45 25% 92%;
+    --secondary-foreground: 30 10% 25%;
+
+    --muted: 45 20% 90%;
+    --muted-foreground: 30 8% 45%;
+
+    /* Brown accent */
+    --accent: 43 75% 31%;
+    --accent-foreground: 45 30% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 45 15% 85%;
+    --input: 45 15% 85%;
+    --ring: 130 15% 42%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar - matching theme */
+    --sidebar-background: 45 25% 95%;
+    --sidebar-foreground: 30 10% 25%;
+    --sidebar-primary: 130 15% 42%;
+    --sidebar-primary-foreground: 45 30% 98%;
+    --sidebar-accent: 43 75% 31%;
+    --sidebar-accent-foreground: 45 30% 98%;
+    --sidebar-border: 45 15% 85%;
+    --sidebar-ring: 130 15% 42%;
+
+    /* Custom Wardo tokens */
+    --wardo-beige: 45 20% 96%;
+    --wardo-cream: 45 30% 98%;
+    --wardo-brown: 43 75% 31%;
+    --wardo-sage: 130 15% 42%;
+    --wardo-text: 30 10% 15%;
+    --wardo-text-muted: 30 8% 45%;
+  }
+
+  .dark {
+    --background: 30 10% 10%;
+    --foreground: 45 20% 96%;
+
+    --card: 30 10% 15%;
+    --card-foreground: 45 20% 96%;
+
+    --popover: 30 10% 15%;
+    --popover-foreground: 45 20% 96%;
+
+    --primary: 130 20% 50%;
+    --primary-foreground: 30 10% 10%;
+
+    --secondary: 30 10% 20%;
+    --secondary-foreground: 45 20% 96%;
+
+    --muted: 30 10% 20%;
+    --muted-foreground: 45 15% 60%;
+
+    --accent: 43 60% 45%;
+    --accent-foreground: 30 10% 10%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 45 20% 96%;
+
+    --border: 30 10% 25%;
+    --input: 30 10% 25%;
+    --ring: 130 20% 50%;
+
+    --sidebar-background: 30 10% 12%;
+    --sidebar-foreground: 45 20% 96%;
+    --sidebar-primary: 130 20% 50%;
+    --sidebar-primary-foreground: 30 10% 10%;
+    --sidebar-accent: 43 60% 45%;
+    --sidebar-accent-foreground: 30 10% 10%;
+    --sidebar-border: 30 10% 25%;
+    --sidebar-ring: 130 20% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+/* Custom utility classes */
+@layer utilities {
+  .font-playfair {
+    font-family: 'Playfair Display', serif;
+  }
+
+  .font-inter {
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* Pinterest-style masonry grid */
+  .masonry-grid {
+    column-count: 2;
+    column-gap: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .masonry-grid {
+      column-count: 3;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .masonry-grid {
+      column-count: 4;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .masonry-grid {
+      column-count: 5;
+    }
+  }
+
+  .masonry-item {
+    break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+}

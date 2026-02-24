@@ -1,0 +1,327 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 5 /Kids [4 0 R 6 0 R 8 0 R 10 0 R 12 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 3195 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 790 Td
+(OUTFITCOMPATIBILITY: COMPUTER VISION PROJECT PROPOSAL REPORT) Tj
+T* () Tj
+T* () Tj
+T* (TECH STACK) Tj
+T* () Tj
+T* (- Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/radix UI) Tj
+T* (- Backend: Node.js, Express, MongoDB \(Mongoose\), JWT, Multer) Tj
+T* (- CV/ML Pipeline: Python, PyTorch, torchvision, NumPy, OpenCV) Tj
+T* (- CV Models:) Tj
+T* (- `compat_top_bottom.pt` for pair compatibility scoring) Tj
+T* (- `B_best_category_tempered.pt` for category fallback on external images) Tj
+T* (- `A_best_pattern_clean_colab.pt` for pattern prediction) Tj
+T* (- `yolov8n-pose.pt` for auto body visibility and crop guidance) Tj
+T* (- Segmentation/Background Removal: rembg/U2Net/ISNet/SegFormer options) Tj
+T* (- LLM Explanation Layer: Ollama \(Qwen 2.5\) via deferred `/explain` API) Tj
+T* (- Dataset: Polyvore outfits \(disjoint train/valid/test and compatibility metadata\)) Tj
+T* () Tj
+T* (ABSTRACT) Tj
+T* () Tj
+T* (OutfitCompatibility is a computer vision system for evaluating outfit pair compatibility and) Tj
+T* (recommending matching clothing items. The project combines deep visual embeddings, category) Tj
+T* (priors, foreground-aware visual feature extraction, and pattern analysis to compute a final) Tj
+T* (compatibility score. It supports two main use-cases: direct top-bottom compatibility checking) Tj
+T* (and single-item recommendation \(top to bottom or bottom to top\). A hybrid retrieval strategy) Tj
+T* (prioritizes user wardrobe items and uses Polyvore references as fallback. The architecture is) Tj
+T* (designed as a full-stack deployable system with a React frontend, Express backend, and a Python) Tj
+T* (inference pipeline. To improve user trust and explainability, the system exposes structured) Tj
+T* (score breakdowns and optional natural-language explanations through an Ollama-based stylist) Tj
+T* (layer. Current limitations such as LLM latency, out-of-distribution category confidence, and) Tj
+T* (first-run cache warmup are identified and included as part of the proposed extension plan.) Tj
+T* () Tj
+T* (INTRODUCTION) Tj
+T* () Tj
+T* (Modern wardrobe assistant systems require more than image classification. Practical adoption) Tj
+T* (depends on four properties: visual understanding, compatibility reasoning, response speed, and) Tj
+T* (user-facing explainability. This project addresses those needs with a context-free computer) Tj
+T* (vision pipeline that can operate on user-uploaded photos and dataset references.) Tj
+T* () Tj
+T* (The system is built to bridge research-style compatibility scoring and production-style API) Tj
+T* (behavior. It includes robust preprocessing \(autocrop and foreground masking\), score fusion with) Tj
+T* (interpretable components, hybrid recommendation from personal wardrobe plus dataset fallback,) Tj
+T* (and frontend modules that present confidence and explanation to non-technical users.) Tj
+T* () Tj
+T* (AIM AND OBJECTIVES) Tj
+T* () Tj
+T* (AIM) Tj
+T* () Tj
+T* (Develop a reusable and explainable computer vision pipeline that evaluates outfit compatibility) Tj
+T* (and recommends matching clothing pieces in a full-stack application setting.) Tj
+T* () Tj
+T* (OBJECTIVES) Tj
+T* () Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 2814 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 790 Td
+(1. Build a reliable pair-scoring model for top-bottom compatibility.) Tj
+T* (2. Support single-image recommendation with automatic direction detection.) Tj
+T* (3. Reduce background interference using segmentation and body-aware crop logic.) Tj
+T* (4. Integrate category, color, brightness, and pattern signals into a unified score.) Tj
+T* (5. Prioritize wardrobe-based recommendations before dataset fallback.) Tj
+T* (6. Provide user-readable explanation without modifying core scoring decisions.) Tj
+T* (7. Keep implementation self-contained under one repository for reproducible deployment.) Tj
+T* () Tj
+T* (THEORY) Tj
+T* () Tj
+T* (COMPATIBILITY AS MULTI-SIGNAL FUSION) Tj
+T* () Tj
+T* (Outfit compatibility is modeled as a weighted combination of learned and handcrafted signals:) Tj
+T* (- Learned pair compatibility from embedding-based neural scoring.) Tj
+T* (- Type prior from category co-occurrence statistics in training pairs.) Tj
+T* (- Color harmony from dominant palette relations.) Tj
+T* (- Brightness balance from masked visual metrics.) Tj
+T* (- Pattern compatibility from model predictions or fallback heuristics.) Tj
+T* () Tj
+T* (This design reflects the theory that style compatibility is not fully captured by a single) Tj
+T* (representation. A robust solution requires both data-driven learning and constrained visual) Tj
+T* (rules.) Tj
+T* () Tj
+T* (EMBEDDING-BASED PAIR SCORING) Tj
+T* () Tj
+T* (Each clothing image is encoded into a feature embedding. Pair interaction is modeled by) Tj
+T* (concatenating direct and element-wise interactions between embeddings. A classifier head) Tj
+T* (produces a base compatibility probability through a sigmoid output.) Tj
+T* () Tj
+T* (CATEGORY PRIOR PROBABILITY) Tj
+T* () Tj
+T* (A Laplace-smoothed prior is computed from positive and negative top-bottom pair frequency:) Tj
+T* (`T\(tc,bc\) = \(pos + alpha\) / \(pos + neg + 2*alpha\)`) Tj
+T* (with `alpha = 1.0`.) Tj
+T* (This prior stabilizes scoring for semantically common pairings and acts as a probabilistic) Tj
+T* (regularizer.) Tj
+T* () Tj
+T* (VISUAL FEATURE THEORY) Tj
+T* () Tj
+T* (Foreground-aware metrics are used to reduce background bias:) Tj
+T* (- Color harmony is computed from weighted dominant palette matching.) Tj
+T* (- Brightness compatibility uses Gaussian penalties on brightness/saturation/contrast) Tj
+T* (  differences.) Tj
+T* (- Pattern compatibility balances solid-pattern interactions and pattern similarity.) Tj
+T* () Tj
+T* (METHOD) Tj
+T* () Tj
+T* (1. DATA AND ASSETS) Tj
+T* () Tj
+T* (- Polyvore disjoint split metadata and images for model retrieval candidates.) Tj
+T* (- Local model checkpoints for pair compatibility, pattern prediction, and category fallback.) Tj
+T* (- User wardrobe images persisted in MongoDB and runtime upload storage.) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 2134 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 790 Td
+() Tj
+T* (2. PREPROCESSING PIPELINE) Tj
+T* () Tj
+T* (1. Accept uploaded image\(s\) through backend API.) Tj
+T* (2. Auto-detect body visibility with YOLO pose and apply semantic crop hints.) Tj
+T* (3. Generate foreground mask with selected remover \(U2Net/SegFormer/etc.\).) Tj
+T* (4. Extract masked visual features \(color, brightness metrics\).) Tj
+T* (5. Infer category via metadata match or fallback category model for external images.) Tj
+T* (6. Infer pattern using pattern model or text heuristic fallback.) Tj
+T* () Tj
+T* (3. SCORING STRATEGY) Tj
+T* () Tj
+T* (Final score is computed as weighted fusion:) Tj
+T* (`final = w_m*M + w_t*T + w_c*C + w_b*B + w_p*P`) Tj
+T* () Tj
+T* (Current default weights:) Tj
+T* (- model: 0.60) Tj
+T* (- type_prior: 0.15) Tj
+T* (- color: 0.12) Tj
+T* (- brightness: 0.08) Tj
+T* (- pattern: 0.05) Tj
+T* () Tj
+T* (Five-band labels:) Tj
+T* (- Excellent Match) Tj
+T* (- Good Match) Tj
+T* (- Borderline Acceptable) Tj
+T* (- Weak Match) Tj
+T* (- Mismatch) Tj
+T* () Tj
+T* (4. RECOMMENDATION STRATEGY) Tj
+T* () Tj
+T* (- Auto mode infers whether upload is top or bottom.) Tj
+T* (- Retrieval shortlist uses embedding cosine similarity.) Tj
+T* (- Final rerank applies full compatibility fusion.) Tj
+T* (- Hybrid mode fills top results from wardrobe first, then Polyvore fallback.) Tj
+T* (- Candidate previews use crop-only policy for cleaner visual relevance.) Tj
+T* () Tj
+T* (5. EXPLAINABILITY STRATEGY) Tj
+T* () Tj
+T* (- Core score is deterministic and unchanged by LLM output.) Tj
+T* (- Explanation runs asynchronously via `/explain` to avoid blocking primary response.) Tj
+T* (- Fallback deterministic explanation is used when LLM output is invalid.) Tj
+T* () Tj
+T* (SYSTEM IMPLEMENTATION) Tj
+T* () Tj
+T* (A. FRONTEND LAYER) Tj
+T* () Tj
+T* (- `MixMatch.tsx`: uploads top and bottom, calls `/compatibility`, then `/explain`.) Tj
+T* (- `GlowUp.tsx`: uploads one item, calls `/recommend`, then `/explain`.) Tj
+T* (- `MyWardrobe.tsx`: CRUD wardrobe items and image uploads.) Tj
+T* (- Structured result cards show score bands, component bars, and explanation status.) Tj
+T* () Tj
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 2872 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 790 Td
+(B. BACKEND LAYER) Tj
+T* () Tj
+T* (- Express routes: `/compatibility`, `/recommend`, `/explain`, `/wardrobe`, `/feedback`.) Tj
+T* (- Multer upload handling with temporary and persistent paths.) Tj
+T* (- JWT-based user authentication and route-level user context.) Tj
+T* (- Python bridge executes pipeline scripts and sanitizes public response payloads.) Tj
+T* (- MongoDB required at startup by project policy.) Tj
+T* () Tj
+T* (C. PIPELINE LAYER) Tj
+T* () Tj
+T* (- Main engine: `services/pipeline/src/outfit_pipeline/engine.py`.) Tj
+T* (- Pair scoring script: `run_pair.py`.) Tj
+T* (- Recommendation scripts: `run_recommend.py`, `run_recommend_hybrid.py`.) Tj
+T* (- Feature extractor for wardrobe cache/backfill: `run_extract_item_features.py`.) Tj
+T* (- Explanation script: `run_explain.py`.) Tj
+T* () Tj
+T* (D. CACHING AND RUNTIME) Tj
+T* () Tj
+T* (- Embedding cache and type-prior cache reduce repeated heavy computation.) Tj
+T* (- Runtime directories are repo-local \(`runtime/uploads`, `runtime/cache`\).) Tj
+T* (- Cold-start latency is higher when caches are first built, then decreases.) Tj
+T* () Tj
+T* (E. KNOWN LIMITATIONS \(CURRENT\)) Tj
+T* () Tj
+T* (1. LLM explanation latency remains a bottleneck for user-perceived responsiveness.) Tj
+T* (2. External/OOD category confidence can be low for difficult images.) Tj
+T* (3. First-run recommendation can take longer during embedding cache warmup.) Tj
+T* (4. Some fairness behaviors still depend on configured heuristics and thresholds.) Tj
+T* () Tj
+T* (CONCLUSION) Tj
+T* () Tj
+T* (This project demonstrates a practical computer vision compatibility system that is both) Tj
+T* (technically grounded and application-ready. The implementation integrates model-based) Tj
+T* (compatibility learning, visual-rule fusion, and full-stack deployment concerns such as API) Tj
+T* (timing, response sanitization, and user-facing interpretability. The hybrid recommendation) Tj
+T* (design is a strong practical contribution because it prioritizes user-owned wardrobe items) Tj
+T* (while preserving fallback coverage from a large reference dataset. Overall, the system is) Tj
+T* (suitable as a final-year CV project with clear research value and deployment relevance.) Tj
+T* () Tj
+T* (FURTHER EXTENSION) Tj
+T* () Tj
+T* (1. Quantitative evaluation suite:) Tj
+T* (- Top-k retrieval metrics \(Recall@K, MRR\) on controlled validation sets.) Tj
+T* (- Calibration analysis for score-to-label alignment.) Tj
+T* () Tj
+T* (2. Latency optimization:) Tj
+T* (- Smaller/faster local LLM variants and token-budget tuning.) Tj
+T* (- Parallelized preprocessing and smarter cache invalidation.) Tj
+T* () Tj
+T* (3. Better robustness for real-world uploads:) Tj
+T* (- Improved category confidence handling and uncertainty propagation.) Tj
+T* (- Enhanced crop validation for occlusion-heavy or multi-person photos.) Tj
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 1134 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 790 Td
+() Tj
+T* (4. Personalization:) Tj
+T* (- Learn user-specific style preferences from feedback history.) Tj
+T* (- Reweight score components per user behavior over time.) Tj
+T* () Tj
+T* (5. Production hardening:) Tj
+T* (- Dedicated observability dashboards for pipeline stages and timeout rates.) Tj
+T* (- Optional degraded operation mode for ML endpoints during DB outages.) Tj
+T* () Tj
+T* (REFERENCES) Tj
+T* () Tj
+T* (1. Han, X. et al., "Learning Fashion Compatibility with Bidirectional LSTMs," ACM MM, 2017.) Tj
+T* (2. Vasileva, M. et al., "Learning Type-Aware Embeddings for Fashion Compatibility," ECCV) Tj
+T* (   Workshops, 2018.) Tj
+T* (3. Polyvore Outfits Dataset \(disjoint splits and compatibility tasks\), public benchmark) Tj
+T* (   resources.) Tj
+T* (4. Ultralytics YOLOv8 Documentation \(pose estimation and keypoint inference\).) Tj
+T* (5. Ronneberger, O. et al., "U-Net: Convolutional Networks for Biomedical Image Segmentation,") Tj
+T* (   MICCAI, 2015.) Tj
+T* (6. PyTorch Documentation, Meta AI.) Tj
+T* (7. OpenCV Documentation.) Tj
+T* (8. Ollama Documentation \(local LLM serving\).) Tj
+ET
+endstream
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000147 00000 n 
+0000000217 00000 n 
+0000000343 00000 n 
+0000003590 00000 n 
+0000003716 00000 n 
+0000006582 00000 n 
+0000006708 00000 n 
+0000008894 00000 n 
+0000009022 00000 n 
+0000011947 00000 n 
+0000012075 00000 n 
+trailer
+<< /Size 14 /Root 1 0 R >>
+startxref
+13262
+%%EOF

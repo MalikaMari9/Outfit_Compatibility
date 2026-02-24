@@ -1,0 +1,97 @@
+{
+  "paths": {
+    "data_root": "../../assets/data/polyvore_outfits",
+    "weights": "../../assets/models/compat_top_bottom.pt",
+    "output_dir": "../../runtime/pipeline_outputs",
+    "cache_dir": "../../runtime/cache/pipeline"
+  },
+  "weights": {
+    "model": 0.6,
+    "type_prior": 0.15,
+    "color": 0.12,
+    "brightness": 0.08,
+    "pattern": 0.05
+  },
+  "retrieval": {
+    "top_k": 5,
+    "shortlist_k": 150,
+    "candidate_splits": [
+      "train",
+      "valid"
+    ],
+    "allow_test_candidates": false,
+    "batch_size": 64,
+    "embedding_cache": true
+  },
+  "model": {
+    "backbone": "resnet18",
+    "embed_dim": 256,
+    "img_size": 224,
+    "threshold": 0.62,
+    "borderline_threshold": 0.55,
+    "weak_threshold": 0.45,
+    "excellent_threshold": 0.72
+  },
+  "pattern_model": {
+    "enabled": true,
+    "weights": "../../assets/models/A_best_pattern_clean_colab.pt",
+    "threshold": 0.35
+  },
+  "category_model": {
+    "enabled": true,
+    "weights": "../../assets/models/B_best_category_tempered.pt",
+    "mapping": "../../assets/models/B_class_mapping_tempered.csv",
+    "topk": 3,
+    "min_confidence": 0.08
+  },
+  "autocrop": {
+    "enabled": true,
+    "weights": "../../assets/models/yolov8n-pose.pt",
+    "conf": 0.25,
+    "keypoint_conf": 0.2,
+    "pad_ratio": 0.06,
+    "shoe_cut": 0.35,
+    "min_person_box_ratio": 0.03,
+    "min_crop_area_ratio": 0.05,
+    "cache_crops": true
+  },
+  "foreground": {
+    "enabled": true,
+    "method": "u2net",
+    "cache_masks": true,
+    "alpha_threshold": 10,
+    "min_mask_ratio": 0.01,
+    "ignore_low_sat_bg": true,
+    "low_sat_threshold": 22,
+    "near_white_v": 235,
+    "near_black_v": 20,
+    "segformer_model_id": "mattmdjaga/segformer_b2_clothes",
+    "segformer_target_labels": [
+      "upper",
+      "shirt",
+      "blouse",
+      "sweater",
+      "jacket",
+      "coat",
+      "dress",
+      "skirt",
+      "pants",
+      "trousers",
+      "shorts",
+      "jeans",
+      "clothes",
+      "apparel"
+    ],
+    "segformer_device": "auto"
+  },
+  "ollama": {
+    "enabled": true,
+    "model": "qwen2.5:1.5b",
+    "host": "http://127.0.0.1:11434",
+    "timeout_sec": 60,
+    "temperature": 0.1,
+    "max_tokens": 160,
+    "retries": 0,
+    "cache_explanations": true
+  }
+}
