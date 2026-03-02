@@ -32,6 +32,8 @@ class VisualFeatures:
     colors: List[ColorToken]
     mask_coverage: float
     effective_mask_coverage: float
+    lighting_reliability: float
+    white_balance_shift: float
 
 
 def _clamp(x: float, lo: float, hi: float) -> float:
@@ -46,6 +48,63 @@ def _normalize_mask(mask: Optional[np.ndarray], shape: tuple[int, int]) -> np.nd
     if m.shape != (h, w):
         raise ValueError(f"Mask shape mismatch. Expected {(h, w)} got {m.shape}")
     return m
+
+
+def _apply_masked_color_constancy(img_bgr: np.ndarray, mask: np.ndarray) -> tuple[np.ndarray, float]:
+    m = _normalize_mask(mask, img_bgr.shape[:2])
+    pixels = img_bgr[m]
+    if pixels.size == 0:
+        return img_bgr, 0.0
+
+    samples_u8 = pixels.reshape(-1, 3).astype(np.uint8)
+    samples = samples_u8.astype(np.float32)
+    if samples.shape[0] > 16000:
+        idx = np.linspace(0, samples.shape[0] - 1, num=16000, dtype=np.int64)
+        samples = samples[idx]
+        samples_u8 = samples_u8[idx]
+
+    means = samples.mean(axis=0)
+    means = np.maximum(means, 1.0)
+    target = float(means.mean())
+    raw_gains = target / means
+
+    hsv = cv2.cvtColor(samples_u8.reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    mean_sat = float(hsv[:, 1].mean()) / 255.0 if hsv.size else 0.0
+    correction_strength = _clamp(1.0 - ((mean_sat - 0.18) / 0.42), 0.15, 1.0)
+
+    gains = 1.0 + ((raw_gains - 1.0) * correction_strength)
+    gains = np.clip(gains, 0.82, 1.22)
+
+    balanced = np.clip(
+        img_bgr.astype(np.float32) * gains.reshape(1, 1, 3),
+        0.0,
+        255.0,
+    ).astype(np.uint8)
+    shift = float(np.max(np.abs(gains - 1.0)))
+    return balanced, shift
+
+
+def _lighting_reliability(metrics: Metrics, eff_mask: np.ndarray, white_balance_shift: float) -> float:
+    brightness_rel = _clamp(1.0 - abs(float(metrics.brightness) - 58.0) / 46.0, 0.10, 1.0)
+    contrast_rel = _clamp(float(metrics.contrast) / 14.0, 0.15, 1.0)
+    mask_rel = _clamp(float(eff_mask.mean()) / 0.10, 0.20, 1.0)
+    cast_rel = _clamp(1.0 - (float(white_balance_shift) / 0.50), 0.15, 1.0)
+
+    if float(metrics.brightness) < 14.0:
+        brightness_rel *= 0.55
+    elif float(metrics.brightness) > 92.0:
+        brightness_rel *= 0.75
+
+    if float(metrics.contrast) < 6.0:
+        contrast_rel *= 0.70
+
+    score = (
+        0.45 * brightness_rel
+        + 0.20 * contrast_rel
+        + 0.15 * mask_rel
+        + 0.20 * cast_rel
+    )
+    return _clamp(score, 0.0, 1.0)
 
 
 def _refine_mask_for_visual(
@@ -205,11 +264,16 @@ def extract_visual_features(img_bgr: np.ndarray) -> VisualFeatures:
         near_white_v=235,
         near_black_v=20,
     )
+    metrics = compute_metrics(img_bgr, mask=eff_mask)
+    balanced_img, wb_shift = _apply_masked_color_constancy(img_bgr, eff_mask)
+    lighting_rel = _lighting_reliability(metrics, eff_mask, wb_shift)
     return VisualFeatures(
-        metrics=compute_metrics(img_bgr, mask=eff_mask),
-        colors=dominant_colors(img_bgr, k=3, mask=eff_mask),
+        metrics=metrics,
+        colors=dominant_colors(balanced_img, k=3, mask=eff_mask),
         mask_coverage=float(base_mask.mean()),
         effective_mask_coverage=float(eff_mask.mean()),
+        lighting_reliability=float(lighting_rel),
+        white_balance_shift=float(wb_shift),
     )
 
 
@@ -230,10 +294,13 @@ def extract_visual_features_with_mask(
         near_white_v=near_white_v,
         near_black_v=near_black_v,
     )
+    metrics = compute_metrics(img_bgr, mask=eff_mask)
+    balanced_img, wb_shift = _apply_masked_color_constancy(img_bgr, eff_mask)
+    lighting_rel = _lighting_reliability(metrics, eff_mask, wb_shift)
     return VisualFeatures(
-        metrics=compute_metrics(img_bgr, mask=eff_mask),
+        metrics=metrics,
         colors=dominant_colors(
-            img_bgr,
+            balanced_img,
             k=3,
             mask=eff_mask,
             ignore_low_sat_bg=ignore_low_sat_bg,
@@ -243,12 +310,47 @@ def extract_visual_features_with_mask(
         ),
         mask_coverage=float(base_mask.mean()),
         effective_mask_coverage=float(eff_mask.mean()),
+        lighting_reliability=float(lighting_rel),
+        white_balance_shift=float(wb_shift),
     )
 
 
 def hue_distance_deg(a: float, b: float) -> float:
     d = abs(a - b)
     return min(d, 360.0 - d)
+
+
+def _colors_distinct(a: ColorToken, b: ColorToken) -> bool:
+    if a.name == b.name:
+        return False
+    neutral_names = {"black", "white", "gray"}
+    if a.name in neutral_names or b.name in neutral_names:
+        return True
+    return hue_distance_deg(a.hue_deg, b.hue_deg) >= 18.0
+
+
+def meaningful_color_palette(colors: List[ColorToken], max_colors: int = 3) -> List[ColorToken]:
+    if not colors:
+        return []
+
+    picked: List[ColorToken] = [colors[0]]
+    for color in colors[1: max(1, int(max_colors))]:
+        if any(not _colors_distinct(color, prev) for prev in picked):
+            continue
+
+        primary = picked[0]
+        if len(picked) == 1:
+            min_pct = max(16.0, float(primary.pct) * 0.35)
+        else:
+            min_pct = max(12.0, float(primary.pct) * 0.22)
+        if float(color.pct) < min_pct:
+            continue
+        picked.append(color)
+    return picked
+
+
+def has_dual_primary(colors: List[ColorToken]) -> bool:
+    return len(meaningful_color_palette(colors, max_colors=2)) >= 2
 
 
 def _color_pair_harmony(a: ColorToken, b: ColorToken) -> float:
@@ -289,8 +391,11 @@ def color_harmony_score(top: VisualFeatures, bottom: VisualFeatures) -> float:
     if not top.colors or not bottom.colors:
         return 0.5
 
-    t_colors, t_weights = _normalized_color_weights(top.colors, max_colors=3)
-    b_colors, b_weights = _normalized_color_weights(bottom.colors, max_colors=3)
+    top_palette = meaningful_color_palette(top.colors, max_colors=3)
+    bottom_palette = meaningful_color_palette(bottom.colors, max_colors=3)
+
+    t_colors, t_weights = _normalized_color_weights(top_palette, max_colors=3)
+    b_colors, b_weights = _normalized_color_weights(bottom_palette, max_colors=3)
     if not t_colors or not b_colors:
         return 0.5
 
@@ -307,8 +412,16 @@ def color_harmony_score(top: VisualFeatures, bottom: VisualFeatures) -> float:
 
     bidirectional = 0.5 * (top_to_bottom + bottom_to_top)
     dominant = _color_pair_harmony(t_colors[0], b_colors[0])
+    top_is_multi = len(top_palette) >= 2
+    bottom_is_multi = len(bottom_palette) >= 2
+    if top_is_multi and bottom_is_multi:
+        dominant_anchor = 0.05
+    elif top_is_multi or bottom_is_multi:
+        dominant_anchor = 0.08
+    else:
+        dominant_anchor = 0.15
     # Keep a small anchor to dominant-color behavior for backward stability.
-    final = 0.85 * bidirectional + 0.15 * dominant
+    final = (1.0 - dominant_anchor) * bidirectional + dominant_anchor * dominant
     return _clamp(final, 0.0, 1.0)
 
 

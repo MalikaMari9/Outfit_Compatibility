@@ -59,6 +59,8 @@ class AutoBodyCropper:
                 str(self.cfg.shoe_cut),
                 str(self.cfg.min_person_box_ratio),
                 str(self.cfg.min_crop_area_ratio),
+                str(self.cfg.full_body_tighten_ratio),
+                "full_body_tighten_algo_v2",
                 self._weights_tag(),
             ]
         )
@@ -114,6 +116,105 @@ class AutoBodyCropper:
         if yy2 <= yy1:
             yy2 = min(h, yy1 + 1)
         return xx1, yy1, xx2, yy2
+
+    def _adaptive_full_body_tighten_ratio(self, person_area_ratio: float, anchor_count: int) -> float:
+        base = max(0.0, min(float(self.cfg.full_body_tighten_ratio), 0.22))
+        if base <= 0.0:
+            return 0.0
+
+        scale = 1.0
+        if person_area_ratio < 0.16:
+            scale = 1.45
+        elif person_area_ratio < 0.28:
+            scale = 1.15
+        elif person_area_ratio > 0.48:
+            scale = 0.55
+        elif person_area_ratio > 0.38:
+            scale = 0.75
+
+        if anchor_count <= 1:
+            scale *= 0.45
+        elif anchor_count == 2:
+            scale *= 0.70
+        elif anchor_count >= 4:
+            scale *= 1.05
+
+        return max(0.0, min(base * scale, 0.22))
+
+    def _semantic_anchor_points(
+        self,
+        semantic: str,
+        shoulders: List[Tuple[float, float]],
+        hips: List[Tuple[float, float]],
+        knees: List[Tuple[float, float]],
+        ankles: List[Tuple[float, float]],
+    ) -> List[Tuple[float, float]]:
+        if semantic == "tops":
+            return [*shoulders, *hips]
+        return [*hips, *knees, *ankles]
+
+    def _tighten_full_body_box(
+        self,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        *,
+        semantic: str,
+        visibility: str,
+        person_area_ratio: float,
+        shoulders: List[Tuple[float, float]],
+        hips: List[Tuple[float, float]],
+        knees: List[Tuple[float, float]],
+        ankles: List[Tuple[float, float]],
+        w: int,
+        h: int,
+    ) -> Tuple[int, int, int, int]:
+        if visibility != "full_body":
+            return x1, y1, x2, y2
+
+        anchor_points = self._semantic_anchor_points(semantic, shoulders, hips, knees, ankles)
+        tighten_ratio = self._adaptive_full_body_tighten_ratio(person_area_ratio, len(anchor_points))
+        if tighten_ratio <= 0.0:
+            return x1, y1, x2, y2
+
+        box_w = max(1, x2 - x1)
+        box_h = max(1, y2 - y1)
+        tx1 = float(x1)
+        tx2 = float(x2)
+        if len(anchor_points) >= 2:
+            xs = [float(p[0]) for p in anchor_points]
+            span = max(xs) - min(xs)
+            if span > 1.0:
+                center_x = (min(xs) + max(xs)) * 0.5
+                anchor_pad = 0.30 if semantic == "tops" else 0.24
+                min_w_from_points = span * (1.0 + anchor_pad)
+                desired_w = box_w * max(0.60, 1.0 - (tighten_ratio * 1.35))
+                target_w = min(float(box_w), max(min_w_from_points, desired_w))
+                half_w = max(1.0, target_w * 0.5)
+                tx1 = center_x - half_w
+                tx2 = center_x + half_w
+        if tx1 == float(x1) and tx2 == float(x2):
+            trim_x = box_w * tighten_ratio * 0.5
+            tx1 = float(x1) + trim_x
+            tx2 = float(x2) - trim_x
+
+        if semantic == "tops":
+            trim_top = box_h * tighten_ratio * 0.08
+            trim_bottom = box_h * tighten_ratio * 0.92
+        else:
+            trim_top = box_h * tighten_ratio * 0.92
+            trim_bottom = box_h * tighten_ratio * 0.08
+        ty1 = float(y1) + trim_top
+        ty2 = float(y2) - trim_bottom
+
+        tightened = self._clip_box(tx1, ty1, tx2, ty2, w=w, h=h)
+        area_ratio = float(
+            max(0, tightened[2] - tightened[0]) * max(0, tightened[3] - tightened[1]) / max(1.0, float(h * w))
+        )
+        if area_ratio < float(self.cfg.min_crop_area_ratio):
+            return x1, y1, x2, y2
+        return tightened
 
     def _kp(
         self,
@@ -459,6 +560,21 @@ class AutoBodyCropper:
             cy1 - pad,
             cx2 + pad,
             cy2 + pad,
+            w=w,
+            h=h,
+        )
+        x1, y1, x2, y2 = self._tighten_full_body_box(
+            x1,
+            y1,
+            x2,
+            y2,
+            semantic=semantic,
+            visibility=visibility,
+            person_area_ratio=person_area_ratio,
+            shoulders=shoulders,
+            hips=hips,
+            knees=knees,
+            ankles=ankles,
             w=w,
             h=h,
         )

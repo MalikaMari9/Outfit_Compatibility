@@ -81,13 +81,14 @@ class AutoCropConfig:
     shoe_cut: float = 0.35
     min_person_box_ratio: float = 0.03
     min_crop_area_ratio: float = 0.05
+    full_body_tighten_ratio: float = 0.12
     cache_crops: bool = True
 
 
 @dataclass
 class ForegroundConfig:
     enabled: bool = True
-    method: str = "u2net"
+    method: str = "segformer"
     cache_masks: bool = True
     alpha_threshold: int = 10
     min_mask_ratio: float = 0.01
@@ -257,6 +258,7 @@ class PipelineConfig:
                 shoe_cut=float(autocrop.get("shoe_cut", 0.35)),
                 min_person_box_ratio=float(autocrop.get("min_person_box_ratio", 0.03)),
                 min_crop_area_ratio=float(autocrop.get("min_crop_area_ratio", 0.05)),
+                full_body_tighten_ratio=float(autocrop.get("full_body_tighten_ratio", 0.12)),
                 cache_crops=bool(autocrop.get("cache_crops", True)),
             ),
             foreground=ForegroundConfig(

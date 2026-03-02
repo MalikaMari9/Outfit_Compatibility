@@ -29,6 +29,7 @@ from .features import (
     brightness_compat_score,
     color_harmony_score,
     extract_visual_features_with_mask,
+    meaningful_color_palette,
     pattern_compat_score,
 )
 from .autocrop import AutoBodyCropper, AutoCropDecision
@@ -464,14 +465,15 @@ class OutfitCompatibilityPipeline:
         self._pattern_cache[key] = pred
         return pred
 
-    def _visual_for_path(self, image_path: Path, cache_key: Optional[str] = None):
+    def _visual_for_path(self, image_path: Path, cache_key: Optional[str] = None, semantic_hint: str = ""):
         key = cache_key or str(image_path.resolve())
-        versioned_key = f"{key}|{self.foreground_method}|{int(self.cfg.foreground.enabled)}"
+        semantic = str(semantic_hint).strip().lower()
+        versioned_key = f"{key}|{self.foreground_method}|{int(self.cfg.foreground.enabled)}|{semantic}"
         if versioned_key in self._visual_cache:
             return self._visual_cache[versioned_key], self._mask_info_cache[versioned_key]
 
         img_bgr = load_bgr(image_path)
-        mask_res = self.segmenter.get_mask(image_path=image_path, image_bgr=img_bgr)
+        mask_res = self.segmenter.get_mask(image_path=image_path, image_bgr=img_bgr, semantic_hint=semantic)
         feats = extract_visual_features_with_mask(
             img_bgr=img_bgr,
             mask=mask_res.mask,
@@ -589,7 +591,21 @@ class OutfitCompatibilityPipeline:
             pattern_source = "image_model"
         else:
             patt = pattern_compat_score(top_meta.text, bottom_meta.text)
-        fuse_weights = self._fuse_weights(top_meta, bottom_meta)
+        base_weights = self._fuse_weights(top_meta, bottom_meta)
+        top_light_rel = float(max(0.0, min(1.0, getattr(top_features, "lighting_reliability", 1.0))))
+        bottom_light_rel = float(max(0.0, min(1.0, getattr(bottom_features, "lighting_reliability", 1.0))))
+        pair_light_rel = min(top_light_rel, bottom_light_rel)
+        color_scale = 0.35 + (0.65 * pair_light_rel)
+        brightness_scale = 0.25 + (0.75 * pair_light_rel)
+        fuse_weights = ScoreWeights(
+            model=base_weights.model,
+            type_prior=base_weights.type_prior,
+            color=base_weights.color * color_scale,
+            brightness=base_weights.brightness * brightness_scale,
+            pattern=base_weights.pattern,
+        ).normalized()
+        top_palette = meaningful_color_palette(top_features.colors, max_colors=3)
+        bottom_palette = meaningful_color_palette(bottom_features.colors, max_colors=3)
         score = combine_scores(
             model_score=model_score,
             type_prior_score=tp,
@@ -613,12 +629,37 @@ class OutfitCompatibilityPipeline:
             "bottom_semantic": bottom_meta.semantic,
             "top_item_id": top_meta.item_id,
             "bottom_item_id": bottom_meta.item_id,
-            "top_primary_color": top_features.colors[0].name if top_features.colors else "",
-            "bottom_primary_color": bottom_features.colors[0].name if bottom_features.colors else "",
+            "top_primary_color": top_palette[0].name if top_palette else "",
+            "bottom_primary_color": bottom_palette[0].name if bottom_palette else "",
+            "top_secondary_color": top_palette[1].name if len(top_palette) > 1 else "",
+            "bottom_secondary_color": bottom_palette[1].name if len(bottom_palette) > 1 else "",
+            "top_color_mode": "dual" if len(top_palette) > 1 else "single",
+            "bottom_color_mode": "dual" if len(bottom_palette) > 1 else "single",
+            "top_color_palette": [
+                {
+                    "name": row.name,
+                    "pct": float(row.pct),
+                    "temperature": row.temperature,
+                }
+                for row in top_palette
+            ],
+            "bottom_color_palette": [
+                {
+                    "name": row.name,
+                    "pct": float(row.pct),
+                    "temperature": row.temperature,
+                }
+                for row in bottom_palette
+            ],
             "top_mask_coverage": float(top_features.mask_coverage),
             "bottom_mask_coverage": float(bottom_features.mask_coverage),
             "top_effective_mask_coverage": float(top_features.effective_mask_coverage),
             "bottom_effective_mask_coverage": float(bottom_features.effective_mask_coverage),
+            "top_lighting_reliability": top_light_rel,
+            "bottom_lighting_reliability": bottom_light_rel,
+            "pair_lighting_reliability": pair_light_rel,
+            "top_white_balance_shift": float(getattr(top_features, "white_balance_shift", 0.0)),
+            "bottom_white_balance_shift": float(getattr(bottom_features, "white_balance_shift", 0.0)),
             "foreground_method": self.foreground_method,
             "pattern_source": pattern_source,
             "pattern_model_enabled": bool(self.pattern_predictor is not None),
@@ -626,6 +667,17 @@ class OutfitCompatibilityPipeline:
             "category_model_enabled": bool(self.category_predictor is not None),
             "category_model_error": self.category_model_error,
             "candidate_splits_used": list(self._candidate_splits_used),
+            "weights_before_lighting_adjustment": {
+                "model": float(base_weights.model),
+                "type_prior": float(base_weights.type_prior),
+                "color": float(base_weights.color),
+                "brightness": float(base_weights.brightness),
+                "pattern": float(base_weights.pattern),
+            },
+            "lighting_weight_adjustment": {
+                "color_scale": float(color_scale),
+                "brightness_scale": float(brightness_scale),
+            },
             "weights_used": {
                 "model": float(fuse_weights.model),
                 "type_prior": float(fuse_weights.type_prior),
@@ -820,8 +872,16 @@ class OutfitCompatibilityPipeline:
             self._model_scores_batch(top_emb[np.newaxis, :], bottom_emb[np.newaxis, :])[0]
         )
 
-        top_vis, top_mask = self._visual_for_path(top_path, cache_key=top_meta.item_id or str(top_path))
-        bottom_vis, bottom_mask = self._visual_for_path(bottom_path, cache_key=bottom_meta.item_id or str(bottom_path))
+        top_vis, top_mask = self._visual_for_path(
+            top_path,
+            cache_key=top_meta.item_id or str(top_path),
+            semantic_hint="tops",
+        )
+        bottom_vis, bottom_mask = self._visual_for_path(
+            bottom_path,
+            cache_key=bottom_meta.item_id or str(bottom_path),
+            semantic_hint="bottoms",
+        )
         top_pat = self._pattern_for_path(top_path, cache_key=top_meta.item_id or str(top_path))
         bottom_pat = self._pattern_for_path(bottom_path, cache_key=bottom_meta.item_id or str(bottom_path))
         score, details = self._fuse(
@@ -913,7 +973,11 @@ class OutfitCompatibilityPipeline:
         query_path, query_crop = self._prepare_input_path(query_input_path, semantic_hint=query_semantic_hint)
         q_meta = self._infer_meta_from_path(query_path, semantic_hint=query_semantic_hint)
         q_emb = self._encode_image(query_path)
-        q_vis, q_mask = self._visual_for_path(query_path, cache_key=q_meta.item_id or str(query_path))
+        q_vis, q_mask = self._visual_for_path(
+            query_path,
+            cache_key=q_meta.item_id or str(query_path),
+            semantic_hint=query_semantic_hint,
+        )
         q_pat = self._pattern_for_path(query_path, cache_key=q_meta.item_id or str(query_path))
 
         candidate_ids, candidate_embs = self._ensure_candidates(candidate_semantic)
@@ -938,7 +1002,11 @@ class OutfitCompatibilityPipeline:
         for i, candidate_id in enumerate(short_ids):
             c_path = self.images_dir / f"{candidate_id}.jpg"
             c_meta = self._meta_for_item(candidate_id)
-            c_vis, c_mask = self._visual_for_path(c_path, cache_key=candidate_id)
+            c_vis, c_mask = self._visual_for_path(
+                c_path,
+                cache_key=candidate_id,
+                semantic_hint=candidate_semantic,
+            )
             c_pat = self._pattern_for_path(c_path, cache_key=candidate_id)
 
             if query_is_top:

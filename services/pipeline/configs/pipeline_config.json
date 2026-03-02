@@ -53,11 +53,12 @@
     "shoe_cut": 0.35,
     "min_person_box_ratio": 0.03,
     "min_crop_area_ratio": 0.05,
+    "full_body_tighten_ratio": 0.12,
     "cache_crops": true
   },
   "foreground": {
     "enabled": true,
-    "method": "u2net",
+    "method": "segformer",
     "cache_masks": true,
     "alpha_threshold": 10,
     "min_mask_ratio": 0.01,
