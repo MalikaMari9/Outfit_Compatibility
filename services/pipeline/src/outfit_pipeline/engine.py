@@ -223,6 +223,8 @@ class OutfitCompatibilityPipeline:
                         ckpt_path=p_cfg.weights,
                         device=self.device,
                         threshold=p_cfg.threshold,
+                        min_reliability=p_cfg.min_reliability,
+                        fine_detail_guard=p_cfg.fine_detail_guard,
                     )
                 except Exception as exc:  # noqa: BLE001
                     self.pattern_model_error = str(exc)
@@ -450,7 +452,10 @@ class OutfitCompatibilityPipeline:
         p_cfg = self.cfg.pattern_model
         ckpt = p_cfg.weights
         ckpt_tag = f"{ckpt.resolve()}:{ckpt.stat().st_mtime_ns}" if ckpt.exists() else str(ckpt)
-        raw = f"{base}|{ckpt_tag}|thr={p_cfg.threshold}"
+        raw = (
+            f"{base}|{ckpt_tag}|thr={p_cfg.threshold}|rel={p_cfg.min_reliability}"
+            f"|fine={p_cfg.fine_detail_guard}|algo=quality_gate_v1"
+        )
         return sha1(raw.encode("utf-8")).hexdigest()
 
     def _pattern_for_path(self, image_path: Path, cache_key: Optional[str] = None) -> Optional[PatternPrediction]:
@@ -690,10 +695,30 @@ class OutfitCompatibilityPipeline:
             details["top_pattern_label"] = top_pattern.top_label
             details["top_pattern_prob"] = float(top_pattern.top_prob)
             details["top_is_patterned"] = bool(top_pattern.patterned)
+            details["top_pattern_raw_label"] = top_pattern.raw_top_label or top_pattern.top_label
+            details["top_pattern_raw_prob"] = float(
+                top_pattern.raw_top_prob if top_pattern.raw_top_label else top_pattern.top_prob
+            )
+            details["top_pattern_reliability"] = float(top_pattern.pattern_reliability)
+            details["top_pattern_quality_score"] = float(top_pattern.quality_score)
+            details["top_pattern_blur_score"] = float(top_pattern.blur_score)
+            details["top_pattern_resolution_score"] = float(top_pattern.resolution_score)
+            details["top_pattern_suppressed"] = bool(top_pattern.suppressed)
+            details["top_pattern_suppression_reason"] = top_pattern.suppression_reason
         if bottom_pattern is not None:
             details["bottom_pattern_label"] = bottom_pattern.top_label
             details["bottom_pattern_prob"] = float(bottom_pattern.top_prob)
             details["bottom_is_patterned"] = bool(bottom_pattern.patterned)
+            details["bottom_pattern_raw_label"] = bottom_pattern.raw_top_label or bottom_pattern.top_label
+            details["bottom_pattern_raw_prob"] = float(
+                bottom_pattern.raw_top_prob if bottom_pattern.raw_top_label else bottom_pattern.top_prob
+            )
+            details["bottom_pattern_reliability"] = float(bottom_pattern.pattern_reliability)
+            details["bottom_pattern_quality_score"] = float(bottom_pattern.quality_score)
+            details["bottom_pattern_blur_score"] = float(bottom_pattern.blur_score)
+            details["bottom_pattern_resolution_score"] = float(bottom_pattern.resolution_score)
+            details["bottom_pattern_suppressed"] = bool(bottom_pattern.suppressed)
+            details["bottom_pattern_suppression_reason"] = bottom_pattern.suppression_reason
         return score, details
 
     def _build_ollama_pair_facts(

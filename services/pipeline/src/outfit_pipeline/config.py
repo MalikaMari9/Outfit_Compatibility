@@ -60,6 +60,8 @@ class PatternModelConfig:
     enabled: bool = True
     weights: Path = Path("assets/models/A_best_pattern_clean_colab.pt")
     threshold: float = 0.35
+    min_reliability: float = 0.42
+    fine_detail_guard: float = 0.58
 
 
 @dataclass
@@ -226,6 +228,8 @@ class PipelineConfig:
                     default_base=project_root,
                 ),
                 threshold=float(pattern_model.get("threshold", 0.35)),
+                min_reliability=float(pattern_model.get("min_reliability", 0.42)),
+                fine_detail_guard=float(pattern_model.get("fine_detail_guard", 0.58)),
             ),
             category_model=CategoryModelConfig(
                 enabled=bool(category_model.get("enabled", True)),

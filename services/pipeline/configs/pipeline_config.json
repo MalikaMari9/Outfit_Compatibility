@@ -35,7 +35,9 @@
   "pattern_model": {
     "enabled": true,
     "weights": "../../assets/models/A_best_pattern_clean_colab.pt",
-    "threshold": 0.35
+    "threshold": 0.35,
+    "min_reliability": 0.42,
+    "fine_detail_guard": 0.58
   },
   "category_model": {
     "enabled": true,
