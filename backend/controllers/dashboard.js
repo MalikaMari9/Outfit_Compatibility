@@ -8,7 +8,6 @@ export const getUserData = async (req, res) => {
         if(!authHeader){
             return res.status(401).json({message : "Unauthorized access"});
         }
-        console.log(authHeader);
         
         const decoded = await verifyToken(authHeader);
         if (!decoded) {
@@ -33,7 +32,6 @@ export const updateUserData = async (req, res) => {
         if(!authHeader){
             return res.status(401).json({message : "Unauthorized access"});
         }
-        console.log(authHeader);
 
         const decoded = await verifyToken(authHeader);
         if (!decoded) {

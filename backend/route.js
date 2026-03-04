@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ACTIVE_DB_SOURCE_KEY, ACTIVE_DB_TARGET } from "./config.js";
 import { register, login } from "./controllers/auth.js";
 import { getUserData, updateUserData } from "./controllers/dashboard.js";
 import {
@@ -62,6 +63,14 @@ router.post("/feedback", submitFeedback);
 
 router.get("/health", (req, res) => {
     return res.status(200).json({ status: "ok" });
+});
+
+router.get("/health/db", (req, res) => {
+    return res.status(200).json({
+        status: "ok",
+        db_target: ACTIVE_DB_TARGET || "unknown",
+        db_source: ACTIVE_DB_SOURCE_KEY || "unknown",
+    });
 });
 
 router.get("/health/ollama", async (req, res) => {

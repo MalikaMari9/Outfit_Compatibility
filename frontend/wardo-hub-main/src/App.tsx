@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import SessionBoundary from "./components/auth/SessionBoundary";
 
 // Pages
 import Index from "./pages/Index";
@@ -30,29 +32,101 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<Index />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/about" element={<About />} />
+        <SessionBoundary>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<Index />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/about" element={<About />} />
 
-          {/* User Routes */}
-          <Route path="/dashboard" element={<UserDashboard />} />
-          <Route path="/style-studio" element={<StyleStudio />} />
-          <Route path="/style-studio/glow-up" element={<GlowUp />} />
-          <Route path="/style-studio/mix-match" element={<MixMatch />} />
-          <Route path="/style-studio/wardrobe" element={<MyWardrobe />} />
-          <Route path="/profile" element={<Profile />} />
+            {/* User Routes */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute requiredRole="user">
+                  <UserDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/style-studio"
+              element={
+                <ProtectedRoute requiredRole="user">
+                  <StyleStudio />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/style-studio/glow-up"
+              element={
+                <ProtectedRoute requiredRole="user">
+                  <GlowUp />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/style-studio/mix-match"
+              element={
+                <ProtectedRoute requiredRole="user">
+                  <MixMatch />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/style-studio/wardrobe"
+              element={
+                <ProtectedRoute requiredRole="user">
+                  <MyWardrobe />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute requiredRole="user">
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Admin Routes */}
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/users" element={<AdminUsers />} />
-          <Route path="/admin/reports" element={<AdminReports />} />
-          <Route path="/admin/settings" element={<AdminSettings />} />
+            {/* Admin Routes */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AdminUsers />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/reports"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AdminReports />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/settings"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AdminSettings />
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Catch-all */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+            {/* Catch-all */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </SessionBoundary>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

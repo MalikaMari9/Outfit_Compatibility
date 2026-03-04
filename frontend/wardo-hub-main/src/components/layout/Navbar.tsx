@@ -4,15 +4,15 @@ import { Bell, Menu, X, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import NotificationsDropdown from './NotificationsDropdown';
 import UserSidebar from './UserSidebar';
+import { getAuthState } from '@/lib/auth';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const storedRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
-  const storedToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  const isAdmin = storedRole === 'admin';
-  const isAuthed = Boolean(storedToken || storedRole);
+  const auth = getAuthState();
+  const isAdmin = auth.isAdmin;
+  const isAuthed = auth.isAuthenticated;
 
   return (
     <nav className="sticky top-0 z-50 bg-card/95 backdrop-blur-sm border-b border-border">

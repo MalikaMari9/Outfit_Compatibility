@@ -1,3 +1,5 @@
+import { getValidToken } from "./auth";
+
 const DEFAULT_API_URL = "http://localhost:8001";
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
@@ -11,6 +13,6 @@ export const apiUrl = (path: string) => {
 };
 
 export const getAuthHeader = () => {
-  const token = localStorage.getItem("token");
+  const token = getValidToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };

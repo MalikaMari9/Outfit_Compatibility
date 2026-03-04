@@ -3,7 +3,11 @@
   "private": true,
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "backup:db": "node scripts/export-db.js",
+    "backup:uploads": "node scripts/backup-uploads.js",
+    "restore:db:local": "node scripts/import-db.js --target=local",
+    "sync:remote-to-local": "node scripts/sync-remote-to-local.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

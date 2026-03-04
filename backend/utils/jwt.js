@@ -19,6 +19,9 @@ export const verifyToken = async (authHeader) => {
         const decoded = verify(token, JWT_SECRET);
         return decoded;
     }catch(err){
+        if (err?.name === "TokenExpiredError" || err?.name === "JsonWebTokenError" || err?.name === "NotBeforeError") {
+            return null;
+        }
         console.error(err);
         return null;
     }

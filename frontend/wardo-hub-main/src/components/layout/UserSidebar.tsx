@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutGrid, User, Sparkles, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { clearAuthState } from '@/lib/auth';
 
 type UserSidebarProps = {
   open?: boolean;
@@ -23,10 +24,7 @@ const UserSidebar = ({ open, onOpenChange }: UserSidebarProps) => {
   };
 
   const handleSignOut = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
-    localStorage.removeItem('email');
-    localStorage.removeItem('profile');
+    clearAuthState();
     navigate('/auth');
   };
 

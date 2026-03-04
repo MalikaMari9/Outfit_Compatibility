@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import Navbar from '@/components/layout/Navbar';
 import { apiUrl } from '@/lib/api';
+import { getAuthState, storeAuthState } from '@/lib/auth';
 
 const Auth = () => {
 
@@ -58,12 +59,15 @@ const Auth = () => {
 
   // Redirect if already logged in
   useEffect(() => {
-    const storedRole = localStorage.getItem('role');
-    if (storedRole === 'admin') {
+    const auth = getAuthState();
+    if (!auth.isAuthenticated) {
+      return;
+    }
+    if (auth.role === 'admin') {
       navigate('/admin');
       return;
     }
-    if (storedRole === 'user') {
+    if (auth.role === 'user') {
       navigate('/dashboard');
     }
   }, [navigate]);
@@ -95,13 +99,15 @@ const Auth = () => {
         const role = getRoleFromResponse(data) || 'user';
         const token = getTokenFromResponse(data);
         const email = data?.email || data?.user?.email || signInEmail;
-        if (token) {
-          localStorage.setItem('token', token);
+        if (!token) {
+          toast({
+            variant: 'destructive',
+            title: 'Sign In Failed',
+            description: 'Authentication token missing from server response.',
+          });
+          return;
         }
-        localStorage.setItem('role', role);
-        if (email) {
-          localStorage.setItem('email', email);
-        }
+        storeAuthState({ token, role, email });
         toast({
           title: 'Welcome back!',
           description: formatResponse(data),
@@ -161,13 +167,15 @@ const Auth = () => {
         const role = getRoleFromResponse(data) || 'user';
         const token = getTokenFromResponse(data);
         const email = data?.email || data?.user?.email || signUpEmail;
-        if (token) {
-          localStorage.setItem('token', token);
+        if (!token) {
+          toast({
+            variant: 'destructive',
+            title: 'Sign Up Failed',
+            description: 'Authentication token missing from server response.',
+          });
+          return;
         }
-        localStorage.setItem('role', role);
-        if (email) {
-          localStorage.setItem('email', email);
-        }
+        storeAuthState({ token, role, email });
         toast({
           title: 'Account Created!',
           description: formatResponse(data),

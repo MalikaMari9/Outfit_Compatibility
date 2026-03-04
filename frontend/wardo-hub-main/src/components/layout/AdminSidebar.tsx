@@ -1,14 +1,14 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, FileText, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { clearAuthState } from '@/lib/auth';
 
 const AdminSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+    clearAuthState();
     navigate('/auth');
   };
 

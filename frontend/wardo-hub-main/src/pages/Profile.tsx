@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiUrl, getAuthHeader } from '@/lib/api';
+import { clearAuthState, getAuthState } from '@/lib/auth';
 import Navbar from '@/components/layout/Navbar';
 import UserSidebar from '@/components/layout/UserSidebar';
 import {
@@ -33,8 +34,9 @@ const Profile = () => {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('email') : null;
-  const storedToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const auth = getAuthState();
+  const storedEmail = auth.email;
+  const storedToken = auth.token;
   const [profile, setProfile] = useState<Profile>({
     full_name: '',
     bio: '',
@@ -71,6 +73,11 @@ const Profile = () => {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          clearAuthState();
+          navigate('/auth');
+          return;
+        }
         return;
       }
       const serverName = data?.user?.name || '';
@@ -140,10 +147,7 @@ const Profile = () => {
   };
 
   const handleSignOut = async () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
-    localStorage.removeItem('email');
-    localStorage.removeItem('profile');
+    clearAuthState();
     navigate('/auth');
   };
 

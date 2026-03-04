@@ -31,6 +31,7 @@ backend/uploads/
 runtime/uploads/
 runtime/cache/
 runtime/pipeline_outputs/
+runtime/backups/
 services/pipeline/outputs/
 
 # Local LLM/vector artifacts
