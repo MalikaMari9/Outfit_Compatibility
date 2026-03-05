@@ -12,7 +12,6 @@ from PIL import Image
 from .config import PipelineConfig, ScoreWeights
 from .data import (
     build_embeddings,
-    build_type_prior_map,
     default_transform,
     get_item_category,
     infer_item_id_from_path,
@@ -42,7 +41,13 @@ from .pattern_model import (
 )
 from .category_model import CategoryPredictor, infer_semantic_from_category_name
 from .modeling import load_pair_model
-from .scoring import ScoreBreakdown, combine_scores, label_from_score, type_prior_lookup
+from .scoring import (
+    ScoreBreakdown,
+    combine_scores,
+    detect_type_category,
+    label_from_score,
+    type_compatibility_score,
+)
 
 RetrievalMode = Literal["top2bottom", "bottom2top"]
 
@@ -190,11 +195,6 @@ class OutfitCompatibilityPipeline:
 
         self.metadata = load_metadata(self.data_root)
         self.category_lookup = load_category_lookup(self.data_root)
-        self.type_prior = build_type_prior_map(
-            self.data_root,
-            cache_path=self.cfg.paths.cache_dir / "type_prior_top_bottom.json",
-            alpha=1.0,
-        )
 
         self._candidate_ids: Dict[str, List[str]] = {}
         self._candidate_embs: Dict[str, np.ndarray] = {}
@@ -580,13 +580,23 @@ class OutfitCompatibilityPipeline:
         top_pattern: Optional[PatternPrediction] = None,
         bottom_pattern: Optional[PatternPrediction] = None,
     ) -> Tuple[ScoreBreakdown, Dict[str, object]]:
-        top_prior_category = top_meta.category if top_meta.category_source == "metadata" else ""
-        bottom_prior_category = bottom_meta.category if bottom_meta.category_source == "metadata" else ""
-        tp = type_prior_lookup(
-            top_category=top_prior_category,
-            bottom_category=bottom_prior_category,
-            table=self.type_prior,
-            default=0.5,
+        top_type_name = top_meta.category_name or top_meta.category
+        bottom_type_name = bottom_meta.category_name or bottom_meta.category
+        top_detected_type = detect_type_category(
+            category_name=top_type_name,
+            semantic_hint=top_meta.semantic,
+        )
+        bottom_detected_type = detect_type_category(
+            category_name=bottom_type_name,
+            semantic_hint=bottom_meta.semantic,
+        )
+        tp = type_compatibility_score(
+            top_category_name=top_type_name,
+            bottom_category_name=bottom_type_name,
+            top_semantic=top_meta.semantic,
+            bottom_semantic=bottom_meta.semantic,
+            top_confidence=float(top_meta.category_confidence),
+            bottom_confidence=float(bottom_meta.category_confidence),
         )
         color = color_harmony_score(top_features, bottom_features)
         bright = brightness_compat_score(top_features, bottom_features)
@@ -624,14 +634,17 @@ class OutfitCompatibilityPipeline:
             "bottom_category": bottom_meta.category_name or bottom_meta.category,
             "top_category_id": top_meta.category,
             "bottom_category_id": bottom_meta.category,
-            "top_prior_category_id": top_prior_category,
-            "bottom_prior_category_id": bottom_prior_category,
+            "top_prior_category_id": top_meta.category,
+            "bottom_prior_category_id": bottom_meta.category,
             "top_category_source": top_meta.category_source,
             "bottom_category_source": bottom_meta.category_source,
             "top_category_confidence": float(top_meta.category_confidence),
             "bottom_category_confidence": float(bottom_meta.category_confidence),
             "top_semantic": top_meta.semantic,
             "bottom_semantic": bottom_meta.semantic,
+            "top_detected_type": top_detected_type or (top_meta.category_name or top_meta.category),
+            "bottom_detected_type": bottom_detected_type or (bottom_meta.category_name or bottom_meta.category),
+            "type_match_source": "detected_type_heuristic",
             "top_item_id": top_meta.item_id,
             "bottom_item_id": bottom_meta.item_id,
             "top_primary_color": top_palette[0].name if top_palette else "",

@@ -193,13 +193,6 @@ const Auth = () => {
     }
   };
 
-  const socialButtons = [
-    { name: 'Google', icon: 'G' },
-    { name: 'Apple', icon: 'A' },
-    { name: 'Facebook', icon: 'F' },
-    { name: 'TikTok', icon: 'T' },
-  ];
-
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -273,30 +266,6 @@ const Auth = () => {
                     {loading ? 'Signing In...' : 'Sign In'}
                   </Button>
                 </form>
-
-                <div className="mt-6">
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-border" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-4 gap-2">
-                    {socialButtons.map((social) => (
-                      <Button
-                        key={social.name}
-                        variant="outline"
-                        className="h-10"
-                        onClick={() => toast({ description: `${social.name} login coming soon!` })}
-                      >
-                        <span className="text-lg">{social.icon}</span>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
               </TabsContent>
 
               {/* Sign Up Tab */}
@@ -351,30 +320,6 @@ const Auth = () => {
                     {loading ? 'Creating Account...' : 'Create Account'}
                   </Button>
                 </form>
-
-                <div className="mt-6">
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-border" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-4 gap-2">
-                    {socialButtons.map((social) => (
-                      <Button
-                        key={social.name}
-                        variant="outline"
-                        className="h-10"
-                        onClick={() => toast({ description: `${social.name} signup coming soon!` })}
-                      >
-                        <span className="text-lg">{social.icon}</span>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
               </TabsContent>
             </Tabs>
           </CardContent>

@@ -1,12 +1,28 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Users, UserPlus, Activity, Upload, Sparkles, Layers, FileText, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import AdminSidebar from '@/components/layout/AdminSidebar';
+import { apiUrl, getAuthHeader } from '@/lib/api';
+import { clearAuthState, getAuthState } from '@/lib/auth';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const userGrowthData = [
+type UserGrowthPoint = {
+  month: string;
+  users: number;
+};
+
+type AdminDashboardSummary = {
+  totalUsers: number;
+  newSignups7d: number;
+  newUsers30d: number;
+  totalUploads: number;
+  pendingReports: number;
+  resolvedReports: number;
+};
+
+const fallbackUserGrowthData: UserGrowthPoint[] = [
   { month: 'Jan', users: 120 },
   { month: 'Feb', users: 180 },
   { month: 'Mar', users: 250 },
@@ -21,37 +37,104 @@ const featureUsageData = [
   { name: 'Wardrobe', usage: 220 },
 ];
 
-const stats = [
-  { title: 'Total Users', value: '1,234', icon: Users, change: '+12%' },
-  { title: 'New Signups', value: '89', icon: UserPlus, subtitle: 'Last 7 days' },
-  { title: 'Active Users', value: '567', icon: Activity, subtitle: 'Last 30 days' },
-  { title: 'Total Uploads', value: '3,456', icon: Upload, change: '+8%' },
-];
-
-const featureStats = [
-  { title: 'Glow Up Usage', value: '450', icon: Sparkles, color: 'bg-accent/10 text-accent' },
-  { title: 'Mix & Match Usage', value: '380', icon: Layers, color: 'bg-primary/10 text-primary' },
-  { title: 'Pending Reports', value: '12', icon: FileText, color: 'bg-destructive/10 text-destructive' },
-  { title: 'Resolved Reports', value: '45', icon: CheckCircle2, color: 'bg-primary/10 text-primary' },
-];
-
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const storedRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
+  const auth = getAuthState();
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [summary, setSummary] = useState<AdminDashboardSummary | null>(null);
+  const [userGrowthData, setUserGrowthData] = useState<UserGrowthPoint[]>(fallbackUserGrowthData);
 
   useEffect(() => {
-    if (storedRole !== 'admin') {
-      navigate('/auth');
-    }
-  }, [storedRole, navigate]);
+    if (!auth.isAdmin) return;
+    let cancelled = false;
 
-  if (storedRole !== 'admin') {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Redirecting to sign in...</p>
-      </div>
-    );
+    const fetchSummary = async () => {
+      setLoadingSummary(true);
+      try {
+        const response = await fetch(apiUrl('/admin/dashboard-summary'), {
+          headers: {
+            ...getAuthHeader(),
+          },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            clearAuthState();
+            navigate('/auth');
+          }
+          return;
+        }
+        if (cancelled) return;
+
+        const liveSummary: AdminDashboardSummary = {
+          totalUsers: Number(payload?.summary?.totalUsers) || 0,
+          newSignups7d: Number(payload?.summary?.newSignups7d) || 0,
+          newUsers30d: Number(payload?.summary?.newUsers30d) || 0,
+          totalUploads: Number(payload?.summary?.totalUploads) || 0,
+          pendingReports: Number(payload?.summary?.pendingReports) || 0,
+          resolvedReports: Number(payload?.summary?.resolvedReports) || 0,
+        };
+        setSummary(liveSummary);
+
+        const points = Array.isArray(payload?.userGrowth)
+          ? payload.userGrowth
+              .map((row: unknown) => {
+                if (!row || typeof row !== 'object') return null;
+                const rec = row as Record<string, unknown>;
+                const month = String(rec.month || '').trim();
+                if (!month) return null;
+                return {
+                  month,
+                  users: Number(rec.users) || 0,
+                };
+              })
+              .filter((row: UserGrowthPoint | null): row is UserGrowthPoint => row !== null)
+          : [];
+        if (points.length > 0) {
+          setUserGrowthData(points);
+        }
+      } catch {
+        // Keep fallback dashboard values if summary fetch fails.
+      } finally {
+        if (!cancelled) setLoadingSummary(false);
+      }
+    };
+
+    void fetchSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAdmin, navigate]);
+
+  if (!auth.isAdmin) {
+    return <Navigate to="/auth" replace />;
   }
+
+  const fmt = (value: number): string => new Intl.NumberFormat().format(value);
+
+  const stats = [
+    { title: 'Total Users', value: summary ? fmt(summary.totalUsers) : '1,234', icon: Users, change: '+12%' },
+    { title: 'New Signups', value: summary ? fmt(summary.newSignups7d) : '89', icon: UserPlus, subtitle: 'Last 7 days' },
+    { title: 'New Users (30d)', value: summary ? fmt(summary.newUsers30d) : '567', icon: Activity, subtitle: 'Last 30 days' },
+    { title: 'Total Uploads', value: summary ? fmt(summary.totalUploads) : '3,456', icon: Upload, change: '+8%' },
+  ];
+
+  const featureStats = [
+    { title: 'Glow Up Usage', value: '450', icon: Sparkles, color: 'bg-accent/10 text-accent' },
+    { title: 'Mix & Match Usage', value: '380', icon: Layers, color: 'bg-primary/10 text-primary' },
+    {
+      title: 'Pending Reports',
+      value: summary ? fmt(summary.pendingReports) : '12',
+      icon: FileText,
+      color: 'bg-destructive/10 text-destructive',
+    },
+    {
+      title: 'Resolved Reports',
+      value: summary ? fmt(summary.resolvedReports) : '45',
+      icon: CheckCircle2,
+      color: 'bg-primary/10 text-primary',
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -62,6 +145,10 @@ const AdminDashboard = () => {
           <h1 className="text-3xl font-playfair font-bold">Welcome back, Admin</h1>
           <p className="text-muted-foreground mt-1">
             Here's what's happening with Wardo today.
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Live data: users, uploads, reports, and user growth. Usage cards remain sample values for now.
+            {loadingSummary ? ' Syncing latest numbers...' : ''}
           </p>
         </div>
 

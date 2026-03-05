@@ -4,6 +4,7 @@ import { register, login } from "./controllers/auth.js";
 import { getUserData, updateUserData } from "./controllers/dashboard.js";
 import {
     deleteAdminUser,
+    getAdminDashboardSummary,
     getAdminReportById,
     getAdminReports,
     getAdminUserById,
@@ -40,6 +41,7 @@ router.get("/admin/users", getAdminUsers);
 router.get("/admin/users/:id", getAdminUserById);
 router.patch("/admin/users/:id", updateAdminUser);
 router.delete("/admin/users/:id", deleteAdminUser);
+router.get("/admin/dashboard-summary", getAdminDashboardSummary);
 router.get("/admin/reports", getAdminReports);
 router.get("/admin/reports/:id", getAdminReportById);
 router.patch("/admin/reports/:id", updateAdminReport);

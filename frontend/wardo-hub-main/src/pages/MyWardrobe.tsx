@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Upload, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Plus, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { apiUrl, getAuthHeader } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
+
+type WardrobeFeaturePayload = Record<string, unknown>;
 
 type WardrobeItem = {
   _id: string;
@@ -20,7 +24,57 @@ type WardrobeItem = {
     name?: string;
     category?: string;
     description?: string;
+    features?: WardrobeFeaturePayload;
+    features_status?: string;
+    features_error?: string;
   };
+};
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+const asString = (value: unknown): string => {
+  const text = String(value ?? '').trim();
+  return text;
+};
+
+const patternLabel = (pattern: Record<string, unknown>): string => {
+  const topLabel = asString(pattern.top_label);
+  if (!topLabel) return '';
+  const patterned = pattern.patterned;
+  if (typeof patterned === 'boolean' && !patterned) return 'Solid';
+  return topLabel.charAt(0).toUpperCase() + topLabel.slice(1);
+};
+
+const prettyCategory = (value: string): string => {
+  const raw = asString(value).toLowerCase();
+  if (raw === 'top' || raw === 'tops') return 'Top';
+  if (raw === 'bottom' || raw === 'bottoms') return 'Bottom';
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
+};
+
+const normalizedWardrobeCategory = (item: WardrobeItem): 'top' | 'bottom' | '' => {
+  const details = item.details || {};
+  const featureCategory = asRecord(details.features);
+  const raw = asString(details.category || featureCategory.semantic).toLowerCase();
+  if (raw === 'top' || raw === 'tops') return 'top';
+  if (raw === 'bottom' || raw === 'bottoms') return 'bottom';
+  return '';
+};
+
+const buildFeatureRows = (item: WardrobeItem): Array<{ label: string; value: string }> => {
+  const details = item.details || {};
+  const features = asRecord(details.features);
+  const color = asRecord(features.color);
+  const pattern = asRecord(features.pattern);
+  const rows = [
+    { label: 'Category', value: prettyCategory(asString(details.category)) || prettyCategory(asString(features.semantic)) },
+    { label: 'Detected Type', value: prettyCategory(asString(features.category_name) || asString(features.category_id)) },
+    { label: 'Primary Color', value: asString(color.primary) },
+    { label: 'Pattern', value: patternLabel(pattern) },
+  ];
+
+  return rows.filter((row) => row.value);
 };
 
 const MyWardrobe = () => {
@@ -34,6 +88,12 @@ const MyWardrobe = () => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'top' | 'bottom'>('all');
+
+  const filteredItems = items.filter((item) => {
+    if (categoryFilter === 'all') return true;
+    return normalizedWardrobeCategory(item) === categoryFilter;
+  });
 
   useEffect(() => {
     fetchWardrobe();
@@ -269,56 +329,108 @@ const MyWardrobe = () => {
             </Dialog>
           </div>
 
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Tabs
+              value={categoryFilter}
+              onValueChange={(value) => setCategoryFilter(value as 'all' | 'top' | 'bottom')}
+            >
+              <TabsList>
+                <TabsTrigger value="all">All</TabsTrigger>
+                <TabsTrigger value="top">Tops</TabsTrigger>
+                <TabsTrigger value="bottom">Bottoms</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <p className="text-sm text-muted-foreground">
+              Showing {filteredItems.length} of {items.length} item{items.length === 1 ? '' : 's'}
+            </p>
+          </div>
+
           {loading ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">Loading wardrobe...</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {items.map((item) => (
-                <Card
-                  key={item._id}
-                  className="overflow-hidden border-none shadow-lg hover:shadow-xl transition-shadow cursor-pointer group"
-                >
-                  <CardContent className="p-0">
-                    <div className="relative overflow-hidden">
-                      <img
-                        src={apiUrl(item.imagePath)}
-                        alt={item.details?.name || 'Wardrobe item'}
-                        className="w-full h-64 object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <div className="absolute bottom-0 left-0 right-0 p-4 text-white transform translate-y-full group-hover:translate-y-0 transition-transform">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <p className="font-medium">{item.details?.name || 'Untitled Item'}</p>
-                            <div className="text-xs uppercase tracking-wide text-white/80">
-                              {item.details?.category || 'Uncategorized'}
+              {filteredItems.map((item) => {
+                const featureRows = buildFeatureRows(item);
+                return (
+                  <Card
+                    key={item._id}
+                    className="overflow-hidden border-none shadow-lg hover:shadow-xl transition-shadow cursor-pointer group"
+                  >
+                    <CardContent className="p-0">
+                      <div className="relative overflow-hidden">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="absolute left-3 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/40 bg-black/55 text-white backdrop-blur-sm transition-colors hover:bg-black/70"
+                              aria-label="View item attributes"
+                            >
+                              <Info className="h-4 w-4" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="w-80">
+                            <div className="space-y-3">
+                              <div>
+                                <p className="font-medium">{item.details?.name || 'Wardrobe Item'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Quick details for this item.
+                                </p>
+                              </div>
+                              {featureRows.length > 0 ? (
+                                <div className="space-y-2 text-sm">
+                                  {featureRows.map((row) => (
+                                    <div key={`${item._id}-${row.label}`} className="flex items-start justify-between gap-3">
+                                      <span className="text-muted-foreground">{row.label}</span>
+                                      <span className="max-w-[58%] text-right font-medium">{row.value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">No detailed attributes available yet.</p>
+                              )}
                             </div>
-                            {item.details?.description && (
-                              <p className="text-xs text-white/80">
-                                {item.details.description}
-                              </p>
-                            )}
+                          </PopoverContent>
+                        </Popover>
+                        <img
+                          src={apiUrl(item.imagePath)}
+                          alt={item.details?.name || 'Wardrobe item'}
+                          className="w-full h-64 object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="absolute bottom-0 left-0 right-0 p-4 text-white transform translate-y-full group-hover:translate-y-0 transition-transform">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <p className="font-medium">{item.details?.name || 'Untitled Item'}</p>
+                              <div className="text-xs uppercase tracking-wide text-white/80">
+                                {item.details?.category || 'Uncategorized'}
+                              </div>
+                              {item.details?.description && (
+                                <p className="text-xs text-white/80">
+                                  {item.details.description}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-white hover:text-white"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDelete(item._id);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-white hover:text-white"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDelete(item._id);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
 
@@ -329,6 +441,17 @@ const MyWardrobe = () => {
               </p>
               <p className="text-sm text-muted-foreground">
                 Start adding outfits from Glow Up and Mix & Match features.
+              </p>
+            </div>
+          )}
+
+          {!loading && items.length > 0 && filteredItems.length === 0 && (
+            <div className="text-center py-16">
+              <p className="text-muted-foreground text-lg mb-4">
+                No {categoryFilter === 'top' ? 'tops' : 'bottoms'} found.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Try another filter or add more items to your wardrobe.
               </p>
             </div>
           )}

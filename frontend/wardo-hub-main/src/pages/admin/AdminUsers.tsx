@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Search, MoreHorizontal, Eye, Edit2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import AdminSidebar from '@/components/layout/AdminSidebar';
+import { clearAuthState, getAuthState } from '@/lib/auth';
 
 type AdminUser = {
   id: string;
@@ -68,20 +69,24 @@ const AdminUsers = () => {
     role: 'user',
     bio: '',
   });
-
-  const storedRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
-
-  useEffect(() => {
-    if (storedRole !== 'admin') {
-      navigate('/auth');
-    }
-  }, [storedRole, navigate]);
+  const auth = getAuthState();
+  const isAdmin = auth.isAdmin;
 
   useEffect(() => {
-    if (storedRole === 'admin') {
+    if (isAdmin) {
       fetchUsers();
     }
-  }, [storedRole]);
+  }, [isAdmin]);
+
+  const handleUnauthorized = () => {
+    clearAuthState();
+    toast({
+      variant: 'destructive',
+      title: 'Session Expired',
+      description: 'Please sign in again.',
+    });
+    navigate('/auth', { replace: true });
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -94,6 +99,10 @@ const AdminUsers = () => {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          handleUnauthorized();
+          return;
+        }
         const message = data?.message || 'Failed to load users.';
         toast({
           variant: 'destructive',
@@ -154,6 +163,10 @@ const AdminUsers = () => {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          handleUnauthorized();
+          return null;
+        }
         const message = data?.message || 'Failed to load user.';
         toast({
           variant: 'destructive',
@@ -233,6 +246,10 @@ const AdminUsers = () => {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          handleUnauthorized();
+          return;
+        }
         const message = data?.message || 'Failed to update user.';
         toast({
           variant: 'destructive',
@@ -278,6 +295,10 @@ const AdminUsers = () => {
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          handleUnauthorized();
+          return;
+        }
         const message = data?.message || 'Failed to delete user.';
         toast({
           variant: 'destructive',
@@ -305,12 +326,8 @@ const AdminUsers = () => {
     }
   };
 
-  if (storedRole !== 'admin') {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Redirecting to sign in...</p>
-      </div>
-    );
+  if (!isAdmin) {
+    return <Navigate to="/auth" replace />;
   }
 
   return (

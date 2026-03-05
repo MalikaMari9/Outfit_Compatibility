@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from outfit_pipeline.engine import OutfitCompatibilityPipeline
-from outfit_pipeline.features import pattern_tags
+from outfit_pipeline.features import ColorToken, meaningful_color_palette, pattern_tags
 
 
 def parse_args() -> argparse.Namespace:
@@ -100,6 +100,44 @@ def _public_path(path_str: str) -> str:
     return Path(path_str).name if path_str else ""
 
 
+def _preferred_display_palette(colors: List[ColorToken]) -> List[ColorToken]:
+    if not colors:
+        return []
+
+    palette = meaningful_color_palette(colors, max_colors=3)
+    if not palette:
+        return list(colors[:3])
+
+    primary = palette[0]
+    neutral_names = {"black", "white", "gray"}
+    if primary.name not in neutral_names:
+        return palette
+
+    chromatic = [row for row in colors if row.name not in neutral_names]
+    if primary.name in {"white", "black"}:
+        chromatic = [row for row in chromatic if float(row.saturation) >= 24.0]
+    else:
+        chromatic = [row for row in chromatic if float(row.saturation) >= 16.0]
+    if not chromatic:
+        return palette
+
+    best_chromatic = max(chromatic, key=lambda row: float(row.pct))
+    if primary.name == "white":
+        min_pct = max(24.0, float(primary.pct) * 0.55)
+    elif primary.name == "black":
+        min_pct = max(20.0, float(primary.pct) * 0.45)
+    else:
+        # Gray can still be shadow/noise, so allow a real garment color to win
+        # sooner than we would for black/white.
+        min_pct = max(12.0, float(primary.pct) * 0.30)
+    if float(best_chromatic.pct) < min_pct:
+        return palette
+
+    reordered = [best_chromatic] + [row for row in colors if row is not best_chromatic]
+    promoted = meaningful_color_palette(reordered, max_colors=3)
+    return promoted or reordered[:3]
+
+
 def main() -> None:
     args = parse_args()
     pipe = OutfitCompatibilityPipeline(config_path=args.config)
@@ -115,6 +153,7 @@ def main() -> None:
     meta = pipe._infer_meta_from_path(prepared_path, semantic_hint=semantic_hint)
     visual, mask_info = pipe._visual_for_path(prepared_path, cache_key=meta.item_id or str(prepared_path))
     pred = pipe._pattern_for_path(prepared_path, cache_key=meta.item_id or str(prepared_path))
+    display_palette = _preferred_display_palette(visual.colors)
 
     if pred is None and (meta.text or "").strip():
         pattern = _pattern_payload_from_text(meta.text)
@@ -131,8 +170,8 @@ def main() -> None:
         "foreground_method": pipe.foreground_method,
         "metrics": asdict(visual.metrics),
         "color": {
-            "primary": visual.colors[0].name if visual.colors else "",
-            "palette": [asdict(c) for c in visual.colors],
+            "primary": display_palette[0].name if display_palette else (visual.colors[0].name if visual.colors else ""),
+            "palette": [asdict(c) for c in display_palette] if display_palette else [asdict(c) for c in visual.colors],
         },
         "pattern": pattern,
         "mask": {

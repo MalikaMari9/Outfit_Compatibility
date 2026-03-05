@@ -1,29 +1,17 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import AdminSidebar from '@/components/layout/AdminSidebar';
+import { getAuthState } from '@/lib/auth';
 
 const AdminSettings = () => {
-  const navigate = useNavigate();
-  const storedRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
-  const storedEmail = typeof window !== 'undefined' ? localStorage.getItem('email') : null;
-  const roleLabel = storedRole || 'admin';
-  const emailLabel = storedEmail || 'admin@example.com';
+  const auth = getAuthState();
+  const roleLabel = auth.role || 'admin';
+  const emailLabel = auth.email || 'admin@example.com';
 
-  useEffect(() => {
-    if (storedRole !== 'admin') {
-      navigate('/auth');
-    }
-  }, [storedRole, navigate]);
-
-  if (storedRole !== 'admin') {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Redirecting to sign in...</p>
-      </div>
-    );
+  if (!auth.isAdmin) {
+    return <Navigate to="/auth" replace />;
   }
 
   return (

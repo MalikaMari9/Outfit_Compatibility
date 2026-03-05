@@ -329,7 +329,7 @@ export const recommendOutfit = async (req, res) => {
     const safeTopK = Number.isFinite(requestedTopK) ? Math.max(1, Math.min(20, Math.round(requestedTopK))) : 3;
     const safeShortlistK = Number.isFinite(requestedShortlistK)
       ? Math.max(10, Math.min(400, Math.round(requestedShortlistK)))
-      : 25;
+      : 20;
     pushTrace(debugTrace, "input_validation", "Validating uploaded image.", {
       has_image: Boolean(file?.path),
       fast_mode: fastMode,

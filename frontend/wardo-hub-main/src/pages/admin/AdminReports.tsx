@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Search, MoreHorizontal, Eye, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import AdminSidebar from '@/components/layout/AdminSidebar';
+import { clearAuthState, getAuthState } from '@/lib/auth';
 
 type ReportStatus = 'pending' | 'resolved' | 'dismissed';
 type ReportCategoryKey = 'mixmatch' | 'glowup' | 'compatibility' | 'recommend' | 'other';
@@ -94,30 +95,23 @@ const AdminReports = () => {
   const [viewOpen, setViewOpen] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [selectedReport, setSelectedReport] = useState<AdminReport | null>(null);
-
-  const storedRole = typeof window !== 'undefined' ? localStorage.getItem('role') : null;
-
-  useEffect(() => {
-    if (storedRole !== 'admin') {
-      navigate('/auth');
-    }
-  }, [storedRole, navigate]);
+  const auth = getAuthState();
+  const isAdmin = auth.isAdmin;
 
   useEffect(() => {
-    if (storedRole === 'admin') {
+    if (isAdmin) {
       void fetchReports();
     }
-  }, [storedRole]);
+  }, [isAdmin]);
 
   const handleUnauthorized = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
+    clearAuthState();
     toast({
       variant: 'destructive',
       title: 'Session Expired',
       description: 'Please sign in again.',
     });
-    navigate('/auth');
+    navigate('/auth', { replace: true });
   };
 
   const fetchReports = async () => {
@@ -270,12 +264,8 @@ const AdminReports = () => {
     }
   };
 
-  if (storedRole !== 'admin') {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Redirecting to sign in...</p>
-      </div>
-    );
+  if (!isAdmin) {
+    return <Navigate to="/auth" replace />;
   }
 
   return (

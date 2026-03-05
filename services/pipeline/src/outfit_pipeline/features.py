@@ -84,6 +84,23 @@ def _apply_masked_color_constancy(img_bgr: np.ndarray, mask: np.ndarray) -> tupl
     return balanced, shift
 
 
+def _lift_low_light_for_color(img_bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    m = _normalize_mask(mask, img_bgr.shape[:2])
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+    masked_v = hsv[:, :, 2][m]
+    if masked_v.size == 0:
+        return img_bgr
+
+    mean_v = float(masked_v.mean())
+    boost = _clamp((92.0 - mean_v) / 72.0, 0.0, 1.0)
+    if boost <= 0.0:
+        return img_bgr
+
+    hsv[:, :, 2] = np.clip(hsv[:, :, 2] * (1.0 + 0.30 * boost) + (14.0 * boost), 0.0, 255.0)
+    hsv[:, :, 1] = np.clip(hsv[:, :, 1] * (1.0 + 0.10 * boost), 0.0, 255.0)
+    return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+
 def _lighting_reliability(metrics: Metrics, eff_mask: np.ndarray, white_balance_shift: float) -> float:
     brightness_rel = _clamp(1.0 - abs(float(metrics.brightness) - 58.0) / 46.0, 0.10, 1.0)
     contrast_rel = _clamp(float(metrics.contrast) / 14.0, 0.15, 1.0)
@@ -168,16 +185,46 @@ def compute_metrics(img_bgr: np.ndarray, mask: Optional[np.ndarray] = None) -> M
 
 
 def color_name_from_hsv(h: float, s: float, v: float) -> tuple[str, str]:
-    if v < 50:
+    deg = (h / 179.0) * 360.0
+    if v < 50 or (v <= 65 and s < 18):
+        if 28 <= v < 50 and s >= 54:
+            if deg < 15 or deg >= 345:
+                return "red", "warm"
+            if 18 <= deg < 42:
+                return "brown", "warm"
+            if 65 <= deg < 170:
+                return "green", "cool"
+            if 190 <= deg < 255:
+                return "blue", "cool"
         return "black", "neutral"
-    if v > 200 and s < 30:
+    if (v > 200 and s < 30) or (v >= 185 and s < 16):
         return "white", "neutral"
-    if s < 40:
+    # Hue can still be informative for muted apparel colors. Rescue low-sat
+    # greens/blues/browns before falling back to a neutral gray label.
+    if s < 12:
+        if v <= 65:
+            return "black", "neutral"
+        if v >= 205:
+            return "white", "neutral"
+        return "gray", "neutral"
+    if s < 22:
+        if v <= 70:
+            return "black", "neutral"
+        if v >= 190:
+            return "white", "neutral"
+        if 65 <= deg < 170 and 75 <= v <= 185 and s >= 14:
+            return "green", "cool"
+        if 190 <= deg < 255 and 75 <= v <= 165 and s >= 15:
+            return "blue", "cool"
+        if 18 <= deg < 42 and 60 <= v < 165 and s >= 14:
+            return "brown", "warm"
         return "gray", "neutral"
 
-    deg = (h / 179.0) * 360.0
     if deg < 15 or deg >= 345:
         return "red", "warm"
+    # Brown is essentially a darker orange in HSV space.
+    if deg < 38 and v < 165 and s >= 25:
+        return "brown", "warm"
     if deg < 35:
         return "orange", "warm"
     if deg < 60:
@@ -266,10 +313,11 @@ def extract_visual_features(img_bgr: np.ndarray) -> VisualFeatures:
     )
     metrics = compute_metrics(img_bgr, mask=eff_mask)
     balanced_img, wb_shift = _apply_masked_color_constancy(img_bgr, eff_mask)
+    color_img = _lift_low_light_for_color(balanced_img, eff_mask)
     lighting_rel = _lighting_reliability(metrics, eff_mask, wb_shift)
     return VisualFeatures(
         metrics=metrics,
-        colors=dominant_colors(balanced_img, k=3, mask=eff_mask),
+        colors=dominant_colors(color_img, k=3, mask=eff_mask),
         mask_coverage=float(base_mask.mean()),
         effective_mask_coverage=float(eff_mask.mean()),
         lighting_reliability=float(lighting_rel),
@@ -296,11 +344,12 @@ def extract_visual_features_with_mask(
     )
     metrics = compute_metrics(img_bgr, mask=eff_mask)
     balanced_img, wb_shift = _apply_masked_color_constancy(img_bgr, eff_mask)
+    color_img = _lift_low_light_for_color(balanced_img, eff_mask)
     lighting_rel = _lighting_reliability(metrics, eff_mask, wb_shift)
     return VisualFeatures(
         metrics=metrics,
         colors=dominant_colors(
-            balanced_img,
+            color_img,
             k=3,
             mask=eff_mask,
             ignore_low_sat_bg=ignore_low_sat_bg,

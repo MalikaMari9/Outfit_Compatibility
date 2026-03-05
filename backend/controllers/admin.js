@@ -1,5 +1,6 @@
 import user from "../models/user.js";
 import feedbackReport from "../models/feedbackReport.js";
+import clothing from "../models/clothing.js";
 import { verifyToken } from "../utils/jwt.js";
 import { isValidObjectId } from "mongoose";
 
@@ -42,6 +43,22 @@ const normalizeReportPage = (value) => {
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const buildRecentMonthBuckets = (count = 6) => {
+  const safeCount = Math.max(1, Number.parseInt(count, 10) || 6);
+  const now = new Date();
+  return Array.from({ length: safeCount }, (_, idx) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (safeCount - 1 - idx), 1);
+    return {
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: MONTH_NAMES[d.getMonth()],
+    };
+  });
+};
+
 const mapReport = (doc) => {
   const report = doc?.toObject ? doc.toObject() : doc;
   const reporter = report?.userId && typeof report.userId === "object" ? report.userId : null;
@@ -62,6 +79,79 @@ const mapReport = (doc) => {
         }
       : null,
   };
+};
+
+export const getAdminDashboardSummary = async (req, res) => {
+  try {
+    const adminUser = await requireAdmin(req, res);
+    if (!adminUser) return;
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentMonths = buildRecentMonthBuckets(6);
+    const oldestMonth = recentMonths[0];
+    const monthStart = new Date(oldestMonth.year, oldestMonth.month - 1, 1);
+
+    const [
+      totalUsers,
+      newSignups7d,
+      newUsers30d,
+      totalUploads,
+      pendingReports,
+      resolvedReports,
+      userGrowthRaw,
+    ] = await Promise.all([
+      user.countDocuments(),
+      user.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
+      user.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
+      clothing.countDocuments(),
+      feedbackReport.countDocuments({ status: "pending" }),
+      feedbackReport.countDocuments({ status: "resolved" }),
+      user.aggregate([
+        { $match: { createdAt: { $gte: monthStart } } },
+        {
+          $group: {
+            _id: {
+              year: { $year: "$createdAt" },
+              month: { $month: "$createdAt" },
+            },
+            users: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    const growthMap = new Map(
+      userGrowthRaw.map((row) => [
+        `${row?._id?.year}-${String(row?._id?.month || "").padStart(2, "0")}`,
+        Number(row?.users || 0),
+      ]),
+    );
+
+    const userGrowth = recentMonths.map((bucket) => ({
+      month: bucket.label,
+      users: growthMap.get(bucket.key) || 0,
+    }));
+
+    return res.status(200).json({
+      summary: {
+        totalUsers,
+        newSignups7d,
+        newUsers30d,
+        totalUploads,
+        pendingReports,
+        resolvedReports,
+      },
+      userGrowth,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Server error" });
+  }
 };
 
 export const getAdminUsers = async (req, res) => {

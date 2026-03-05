@@ -54,6 +54,9 @@ _FINE_DETAIL_LABELS = {
     "polka_dot",
 }
 
+_ABSTRACT_LABEL = "abstract"
+_STRIPED_LABEL = "striped"
+
 
 class PatternPredictor:
     def __init__(
@@ -151,9 +154,18 @@ class PatternPredictor:
         return "", 0.0
 
     def _min_reliability_for(self, label: str) -> float:
-        if str(label).lower().strip() in _FINE_DETAIL_LABELS:
+        normalized = str(label).lower().strip()
+        if normalized == _ABSTRACT_LABEL:
+            return max(0.34, self.min_reliability - 0.08)
+        if normalized in _FINE_DETAIL_LABELS:
             return self.min_reliability
         return max(0.26, self.min_reliability - 0.08)
+
+    def _fine_detail_guard_for(self, label: str) -> float:
+        normalized = str(label).lower().strip()
+        if normalized == _ABSTRACT_LABEL:
+            return max(0.48, self.fine_detail_guard - 0.10)
+        return self.fine_detail_guard
 
     @torch.no_grad()
     def predict(self, img: Image.Image) -> PatternPrediction:
@@ -178,17 +190,38 @@ class PatternPredictor:
         top_prob = raw_top_prob
         suppressed = False
         suppression_reason = ""
-        if raw_top_label.lower().strip() in _FINE_DETAIL_LABELS and quality_score < self.fine_detail_guard:
+        raw_label_norm = raw_top_label.lower().strip()
+        fine_detail_guard = self._fine_detail_guard_for(raw_top_label)
+        if raw_label_norm in _FINE_DETAIL_LABELS and quality_score < fine_detail_guard:
             alt_label, alt_prob = self._best_non_fine_detail(probs=probs, exclude_idx=top_idx)
-            suppressed = True
-            if alt_label and alt_prob >= max(self.threshold, raw_top_prob * 0.60):
+            keep_abstract = (
+                raw_label_norm == _ABSTRACT_LABEL
+                and raw_top_prob >= max(self.threshold + 0.04, 0.42)
+                and raw_top_prob >= (alt_prob + 0.06)
+            )
+            if keep_abstract:
+                suppressed = False
+            elif alt_label and alt_prob >= max(self.threshold, raw_top_prob * 0.60):
+                suppressed = True
                 top_label = alt_label
                 top_prob = alt_prob
                 suppression_reason = "fine_detail_low_quality_alt"
             else:
+                suppressed = True
                 top_label = "uncertain"
                 top_prob = min(raw_top_prob, raw_top_prob * (0.45 + 0.35 * quality_score))
                 suppression_reason = "fine_detail_low_quality"
+
+        if top_label == raw_top_label and raw_label_norm == _STRIPED_LABEL:
+            stripe_conf_floor = max(self.threshold + 0.08, 0.46)
+            weak_prob = raw_top_prob < stripe_conf_floor
+            weak_margin = margin_score < 0.20 and raw_top_prob < 0.58
+            weak_quality = quality_score < 0.32 and raw_top_prob < 0.60
+            if weak_prob or weak_margin or weak_quality:
+                suppressed = True
+                top_label = "uncertain"
+                top_prob = min(raw_top_prob, raw_top_prob * (0.50 + 0.30 * quality_score))
+                suppression_reason = "striped_low_signal"
 
         reliable = bool(
             top_label != "uncertain"

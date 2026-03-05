@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload, AlertCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Upload, AlertCircle, Sparkles, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { apiUrl, getAuthHeader } from '@/lib/api';
+import { clearAuthState } from '@/lib/auth';
 
 const MIXMATCH_LOADING_STAGES = [
   'Uploading image files...',
@@ -265,7 +267,7 @@ const MixMatch = () => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          localStorage.removeItem('token');
+          clearAuthState();
           toast({
             variant: 'destructive',
             title: 'Session Expired',
@@ -385,7 +387,7 @@ const MixMatch = () => {
       const llmData = (await response.json().catch(() => ({}))) as Record<string, any>;
       if (!response.ok) {
         if (response.status === 401) {
-          localStorage.removeItem('token');
+          clearAuthState();
           toast({
             variant: 'destructive',
             title: 'Session Expired',
@@ -507,6 +509,30 @@ const MixMatch = () => {
     { label: 'Brightness Balance', value: pct(resultBreakdown?.brightness) },
     { label: 'Pattern Balance', value: pct(resultBreakdown?.pattern) },
   ];
+  const weakestComponent =
+    componentScores.length > 0
+      ? componentScores.reduce((lowest, row) => (row.value < lowest.value ? row : lowest), componentScores[0])
+      : null;
+  const compatibilityHeadline =
+    finalScore >= 0.72
+      ? 'This pairing feels polished and balanced.'
+      : finalScore >= 0.62
+        ? 'This pairing works well with only minor styling risk.'
+        : finalScore >= 0.55
+          ? 'This pairing is wearable, but it needs careful styling.'
+          : finalScore >= 0.45
+            ? 'This pairing feels weak and may look off together.'
+            : 'This pairing likely clashes and needs a swap.';
+  const compatibilityNextStep =
+    weakestComponent?.label === 'Color Harmony'
+      ? 'Try repeating one tone across both pieces or introduce a neutral to calm the contrast.'
+      : weakestComponent?.label === 'Pattern Balance'
+        ? 'Keep one piece quieter so the pattern balance feels more intentional.'
+        : weakestComponent?.label === 'Brightness Balance'
+          ? 'A lighter or darker swap on one piece should improve the overall balance.'
+          : weakestComponent?.label === 'Type Match'
+            ? 'A cleaner silhouette pairing would likely improve the match most.'
+            : 'If it still feels off in person, swap the weaker piece first and keep the stronger one.';
   const topPatternType = patternType(resultDetails?.top_is_patterned, resultDetails?.top_pattern_label);
   const bottomPatternType = patternType(resultDetails?.bottom_is_patterned, resultDetails?.bottom_pattern_label);
   const patternPairing = `${topPatternType} + ${bottomPatternType}`;
@@ -908,6 +934,10 @@ const MixMatch = () => {
                             </div>
                             <Badge variant="secondary">{toLabel(resultPayload?.label)}</Badge>
                           </div>
+                          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
+                            <p className="font-medium">{compatibilityHeadline}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{compatibilityNextStep}</p>
+                          </div>
                           <div className="rounded-lg border border-border bg-secondary/30 p-3 text-sm">
                             <p className="text-xs uppercase text-muted-foreground">Pair Summary</p>
                             <p className="mt-1 font-semibold">
@@ -1006,20 +1036,28 @@ const MixMatch = () => {
 
                     <Card className="border-0 shadow-lg">
                       <CardHeader className="bg-secondary/50">
-                        <CardTitle className="font-serif text-lg">Score Breakdown</CardTitle>
+                        <CardTitle className="font-serif text-lg">Scoring Details</CardTitle>
                       </CardHeader>
                       <CardContent className="p-5">
-                        <div className="space-y-3">
-                          {componentScores.map((row) => (
-                            <div key={row.label}>
-                              <div className="mb-1 flex items-center justify-between text-sm">
-                                <span>{row.label}</span>
-                                <span className="text-muted-foreground">{row.value}%</span>
-                              </div>
-                              <Progress value={row.value} />
+                        <Collapsible className="rounded-lg border border-border bg-background/80 px-3 py-2">
+                          <CollapsibleTrigger className="flex w-full items-center justify-between text-left text-sm font-medium">
+                            <span>Open component score breakdown</span>
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="pt-3">
+                            <div className="space-y-3">
+                              {componentScores.map((row) => (
+                                <div key={row.label}>
+                                  <div className="mb-1 flex items-center justify-between text-sm">
+                                    <span>{row.label}</span>
+                                    <span className="text-muted-foreground">{row.value}%</span>
+                                  </div>
+                                  <Progress value={row.value} />
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          </CollapsibleContent>
+                        </Collapsible>
                       </CardContent>
                     </Card>
 

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Upload, Sparkles, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Upload, Sparkles, AlertTriangle, ArrowLeft, ChevronDown } from "lucide-react";
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { apiUrl, getAuthHeader } from '@/lib/api';
+import { clearAuthState } from '@/lib/auth';
 
 const GLOWUP_LOADING_STAGES = [
   "Uploading image...",
@@ -100,6 +102,36 @@ const normalizeRecommendationSource = (row: Record<string, any>): 'wardrobe' | '
   return 'polyvore';
 };
 
+type GlowUpAnalysisMode = 'quick' | 'best';
+
+const GLOWUP_MODE_CONFIG: Record<
+  GlowUpAnalysisMode,
+  {
+    label: string;
+    helper: string;
+    topK: number;
+    shortlistK: number;
+    fastMode: boolean;
+  }
+> = {
+  quick: {
+    label: 'Quick',
+    helper: 'Lower latency. Uses fast ranking and a smaller rerank pass.',
+    topK: 4,
+    shortlistK: 25,
+    fastMode: true,
+  },
+  best: {
+    label: 'Best',
+    helper: 'Higher quality. Runs slower, but uses fuller ranking and richer checks.',
+    topK: 4,
+    shortlistK: 50,
+    fastMode: false,
+  },
+};
+
+const DEFAULT_GLOWUP_MODE: GlowUpAnalysisMode = 'quick';
+
 const GlowUp = () => {
   const navigate = useNavigate();
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -168,6 +200,7 @@ const GlowUp = () => {
   const handleAnalyze = async (includePolyvore = true, forceMode = '') => {
     if (!uploadedFile) return;
 
+    const modeConfig = GLOWUP_MODE_CONFIG[DEFAULT_GLOWUP_MODE];
     setIncludePolyvoreRequested(includePolyvore);
     setIsAnalyzing(true);
     const requestToken = ++requestTokenRef.current;
@@ -175,9 +208,9 @@ const GlowUp = () => {
     try {
       const formData = new FormData();
       formData.append('image', uploadedFile);
-      formData.append('top_k', '4');
-      formData.append('shortlist_k', '25');
-      formData.append('fast_mode', '1');
+      formData.append('top_k', String(modeConfig.topK));
+      formData.append('shortlist_k', String(modeConfig.shortlistK));
+      formData.append('fast_mode', modeConfig.fastMode ? '1' : '0');
       formData.append('include_polyvore', includePolyvore ? '1' : '0');
       if (forceMode) {
         formData.append('force_mode', forceMode);
@@ -193,7 +226,7 @@ const GlowUp = () => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          localStorage.removeItem('token');
+          clearAuthState();
           toast({
             variant: 'destructive',
             title: 'Session Expired',
@@ -342,7 +375,7 @@ const GlowUp = () => {
       const llmData = (await response.json().catch(() => ({}))) as Record<string, any>;
       if (!response.ok) {
         if (response.status === 401) {
-          localStorage.removeItem('token');
+          clearAuthState();
           toast({
             variant: 'destructive',
             title: 'Session Expired',
@@ -522,9 +555,20 @@ const GlowUp = () => {
   );
   const topResultSource = topResult ? normalizeRecommendationSource(topResult) : 'polyvore';
   const topResultSourceLabel = topResultSource === 'wardrobe' ? 'From Your Wardrobe' : 'Polyvore Fallback';
+  const topResultBadgeLabel = topResultSource === 'wardrobe' ? 'Wardrobe Match' : 'Reference Only';
   const topResultName = String(
     topDetails?.wardrobe_name || topDetails?.name || topResult?.name || '',
   ).trim();
+  const topResultSummary =
+    topResultSource === 'wardrobe'
+      ? finalScore >= 0.62
+        ? 'This is the strongest wardrobe match for your uploaded piece right now.'
+        : 'This keeps the result grounded in your wardrobe, but styling it carefully will matter.'
+      : 'No strong wardrobe match was available, so this result is shown as an inspiration reference.';
+  const topResultNextStep =
+    topResultSource === 'wardrobe'
+      ? 'Use this as your first choice, then compare the secondary matches if you want variety.'
+      : 'Treat this as a styling direction and look for a similar item in your own closet.';
   const recommendationMessage = String(recommendPayload?.message || '').trim();
   const noWardrobeMatchMessage =
     recommendationMessage || "No matching items found in your wardrobe for this upload.";
@@ -728,12 +772,12 @@ const GlowUp = () => {
                 >
                   {isAnalyzing ? (
                     <>Processing...</>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2 h-5 w-5" />
-                      Get Styling Suggestions
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-5 w-5" />
+                        Get Styling Suggestions
+                      </>
+                    )}
                 </Button>
               </div>
             </div>
@@ -836,8 +880,9 @@ const GlowUp = () => {
                     <div className="p-5 space-y-4">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={topResultSource === 'wardrobe' ? 'default' : 'secondary'}>
-                          {topResultSourceLabel}
+                          {topResultBadgeLabel}
                         </Badge>
+                        <span className="text-xs text-muted-foreground">{topResultSourceLabel}</span>
                         {topResultName && (
                           <span className="text-xs text-muted-foreground">Name: {topResultName}</span>
                         )}
@@ -849,6 +894,10 @@ const GlowUp = () => {
                         </div>
                         <Badge variant="secondary">{topScoreLabel}</Badge>
                       </div>
+                      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
+                        <p className="font-medium">{topResultSummary}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{topResultNextStep}</p>
+                      </div>
                       <div className="rounded-lg border border-border bg-secondary/30 p-3 text-sm">
                         <p className="text-xs uppercase text-muted-foreground">Recommended Item</p>
                         <p className="mt-1 text-sm font-semibold">{candidateRoleLabel}</p>
@@ -859,17 +908,25 @@ const GlowUp = () => {
                         </p>
                       </div>
                       <p className="text-xs text-muted-foreground">Pattern pairing: {patternPairing}</p>
-                      <div className="space-y-3">
-                        {componentScores.map((row) => (
-                          <div key={row.label}>
-                            <div className="mb-1 flex items-center justify-between text-sm">
-                              <span>{row.label}</span>
-                              <span className="text-muted-foreground">{row.value}%</span>
-                            </div>
-                            <Progress value={row.value} />
+                      <Collapsible className="rounded-lg border border-border bg-background/80 px-3 py-2">
+                        <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium">
+                          <span>Scoring details</span>
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-3">
+                          <div className="space-y-3">
+                            {componentScores.map((row) => (
+                              <div key={row.label}>
+                                <div className="mb-1 flex items-center justify-between text-sm">
+                                  <span>{row.label}</span>
+                                  <span className="text-muted-foreground">{row.value}%</span>
+                                </div>
+                                <Progress value={row.value} />
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     </div>
                   </CardContent>
                 </Card>
@@ -1020,6 +1077,9 @@ const GlowUp = () => {
                   <CardContent className="p-5 space-y-4">
                     <p className="text-sm text-muted-foreground">
                       We detected both top and bottom signals from this image. Choose how to interpret it.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Retry will use the default recommendation mode.
                     </p>
                     <div className="rounded-md border border-border bg-secondary/30 p-3 text-sm">
                       <p>Top confidence: <span className="font-medium">{ambiguousTopConf}%</span></p>

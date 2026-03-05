@@ -60,7 +60,7 @@ class AutoBodyCropper:
                 str(self.cfg.min_person_box_ratio),
                 str(self.cfg.min_crop_area_ratio),
                 str(self.cfg.full_body_tighten_ratio),
-                "full_body_tighten_algo_v2",
+                "full_body_tighten_algo_v3",
                 self._weights_tag(),
             ]
         )
@@ -207,6 +207,10 @@ class AutoBodyCropper:
             trim_bottom = box_h * tighten_ratio * 0.08
         ty1 = float(y1) + trim_top
         ty2 = float(y2) - trim_bottom
+        if semantic != "tops" and hips:
+            hip_y = float(np.mean([p[1] for p in hips]))
+            waist_guard = hip_y + max(0.0, box_h * 0.02)
+            ty1 = max(ty1, waist_guard)
 
         tightened = self._clip_box(tx1, ty1, tx2, ty2, w=w, h=h)
         area_ratio = float(
@@ -539,10 +543,10 @@ class AutoBodyCropper:
 
             if hips:
                 hip_y = float(np.mean([p[1] for p in hips]))
-                cy1 = hip_y - 0.05 * ph
+                cy1 = hip_y + (0.01 * ph if visibility == "full_body" else -0.05 * ph)
             elif knees:
                 knee_y = float(np.mean([p[1] for p in knees]))
-                cy1 = knee_y - 0.35 * ph
+                cy1 = knee_y - ((0.24 if visibility == "full_body" else 0.35) * ph)
             else:
                 cy1 = by1 + 0.45 * ph
             cy2 = by2
@@ -555,11 +559,18 @@ class AutoBodyCropper:
                     shoe_line = ankle_y - float(self.cfg.shoe_cut) * (0.12 * ph)
                 cy2 = min(cy2, shoe_line + pad)
 
+        if semantic == "tops":
+            top_pad = pad
+            bottom_pad = pad
+        else:
+            top_pad = max(0, int(round(pad * (0.20 if visibility == "full_body" else 0.50))))
+            bottom_pad = pad
+
         x1, y1, x2, y2 = self._clip_box(
             cx1 - pad,
-            cy1 - pad,
+            cy1 - top_pad,
             cx2 + pad,
-            cy2 + pad,
+            cy2 + bottom_pad,
             w=w,
             h=h,
         )

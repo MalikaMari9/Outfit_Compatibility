@@ -13,7 +13,7 @@ const PYTHON_BIN = String(process.env.PYTHON_BIN || "python").trim() || "python"
 const PIPELINE_TIMEOUT_MS = Math.max(30_000, Number(process.env.PIPELINE_TIMEOUT_MS || 300_000));
 const RECOMMEND_TIMEOUT_MS = Math.max(60_000, Number(process.env.RECOMMEND_TIMEOUT_MS || 900_000));
 const DEFAULT_RECOMMEND_TOP_K = 3;
-const DEFAULT_RECOMMEND_SHORTLIST_K = 25;
+const DEFAULT_RECOMMEND_SHORTLIST_K = 20;
 
 const toBool = (value, fallback = false) => {
   if (value === undefined || value === null) return fallback;
